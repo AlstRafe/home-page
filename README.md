@@ -49,6 +49,8 @@ name = "Memo"
 ```
 
 - 静的ファイルは `.html .css .js .json .svg .png .jpg .gif .webp .ico .woff2 .mp3 .mp4 .webm .wasm` だけ配信。ドットファイル・ドットフォルダ・フォルダの外は 404、GET/HEAD のみ
+- 静的ファイルには ETag を付け、変わっていなければ 304（中身なし）で返す。1KB 以上のテキスト（html・css・js・json・svg・wasm）は gzip で送る（CoreLab のスクリプト約 1.2MB が 2 回目以降はほぼ 0、初回も約 1/5）
+- `preview = "portal.json"` で、サイトのフォルダにある JSON の中身をカードに並べる（`{"title": "見出し", "items": [["文", "/サイト内のパス"], ...]}`、最大 5 件、サイト内のパスだけ）。JSON を書き換えると一覧に即反映。CoreLab は「すぐ遊べるミッション」を Infra Game 側の portal.json で持つ
 - 「← サイト一覧」へ戻るリンクは、サイトが自前で持っていなければポータルが各 HTML の左下に自動で付ける（自前で持つなら `home_link = "own"`）
 - `public = false` でテスト公開（Funnel）の名前からは隠す。このPC・LAN からは見えるので、公開前の確認に使える
 - 書き間違いや読み込めなかったサイトは、このPCから一覧を開いたときだけページ下の「このPCの持ち主向け」欄に理由が出る
@@ -75,7 +77,10 @@ python -m homepage --demo
 - `News Site\work\scratch\home-page-server-20261024.patch`（控え: `patches/`、1 コミット）
   - `newsreader/hosting.py`（このサーバー向けの読み込み口）を追加、`newsreader/portal` を News Site 単体用に縮小（一覧ページ・CoreLab 配信を削除）、launcher.py が Home Page 配信中は2台目を起動しない、テスト更新
   - 取り込まれるまでは `homepage/compat.py` が代わりを務める。取り込み後の配備（VERSION の更新）でサーバーが再起動し、自動で hosting.py に切り替わる。その後 compat.py と server.py の `COMPAT` を消す
+- `News Site\work\scratch\news-site-ux-20261024.patch`（控え: `patches/`、1 コミット。上のパッチの後に当てる）
+  - スマホの下部メニューに「サイト一覧」（上のメニューの「サイト一覧」はスマホでは隠れていた）
+  - 一覧ページの NewsBridge カードの見出しを、訳済みのものから並べる（取得したばかりの英語・韓国語の見出しが先頭に出ない）
 
 ## 今後の候補
 
-- 静的サイトの「最新状況」（今は更新日だけ）をサイト側の小さな JSON から読む
+- 一覧ページの OGP 画像（リンクを貼ったときのプレビュー）

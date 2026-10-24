@@ -10,7 +10,10 @@ with ``--demo``, a stand-in News Site), for trying out a change.
 """
 from __future__ import annotations
 
+import gzip
+import hashlib
 import html
+import json
 import re
 import threading
 import time
@@ -161,7 +164,7 @@ class Portal:
     def _site(self, entry) -> Site | None:
         if not isinstance(entry, dict):
             raise ValueError("書き方が違います。")
-        text = {key: _text(entry, key) for key in ("name", "subtitle", "description", "icon", "open")}
+        text = {key: _text(entry, key) for key in ("name", "subtitle", "description", "icon", "open", "preview")}
         accent = _text(entry, "accent") or "gray"
         if accent not in ACCENTS:
             raise ValueError(f"accent は {' / '.join(ACCENTS)} のどれかです。")
@@ -190,8 +193,15 @@ class Portal:
         root = (self.config.parent / folder).resolve()
         if not (root / "index.html").is_file():
             raise ValueError(f"{root} に index.html がありません（このPCにないサイトは表示しません）。")
+        preview = None
+        if text["preview"]:
+            file = (root / text["preview"]).resolve()
+            if file.suffix.lower() != ".json" or not file.is_relative_to(root):
+                raise ValueError("preview はそのフォルダの中の .json ファイルです（例: \"portal.json\"）。")
+            preview = lambda: _preview_file(file)  # noqa: E731
         files = StaticFiles(root, self.allowed_hosts, home_link=_text(entry, "home_link") != "own")
-        return Site(mount, text["name"], files, text["subtitle"], text["description"], files=files, **common)
+        return Site(mount, text["name"], files, text["subtitle"], text["description"], files=files,
+                    preview=preview, **common)
 
     # -- requests -----------------------------------------------------------------------------
 
@@ -306,15 +316,19 @@ class Portal:
         e = html.escape
         problems = "".join(f"<li>{e(p)}</li>" for p in self.problems)
         problems = f'<ul class="problems" role="status">{problems}</ul>' if problems else ""
-        return (f'<aside class="owner"><h2>このPCの持ち主向け</h2>{problems}'
+        return (f'<div class="owner"><h2>このPCの持ち主向け</h2>{problems}'
                 f'<p>サイトを足すには <code>{e(str(self.config))}</code> に <code>[[site]]</code> を1つ書き足して、'
-                f'このページを再読み込みします（再起動は要りません）。この欄はテスト公開の名前では表示されません。</p></aside>')
+                f'このページを再読み込みします（再起動は要りません）。この欄はテスト公開の名前では表示されません。</p></div>')
 
 
 class StaticFiles:
     """WSGI: one folder's files, read only ("/" is its index.html). Nothing outside the folder,
     no dot files or folders (.git, .claude), only the file types below. ``home_link``: HTML pages
-    get a small "← サイト一覧" link back to the index (for sites that have none of their own)."""
+    get a small "← サイト一覧" link back to the index (for sites that have none of their own).
+
+    Every answer carries an ETag, so a browser that has the file asks again with it and gets a
+    bodiless 304 (a game's scripts are not fetched again over the Funnel on every visit), and text
+    is sent gzipped to browsers that take it (about a fifth of the bytes for scripts)."""
 
     TYPES = {".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",
              ".js": "text/javascript; charset=utf-8", ".json": "application/json", ".svg": "image/svg+xml",
@@ -330,12 +344,16 @@ class StaticFiles:
                  'box-shadow:0 2px 8px rgba(0,0,0,.3)"><span aria-hidden="true">←</span>サイト一覧</a>')
     #: Files looked at for the "更新" date, and how long the date is kept.
     NEWEST_FILES, NEWEST_SECONDS = 2000, 60.0
+    #: Types sent gzipped (the rest are compressed already), from this size up.
+    GZIP_TYPES, GZIP_MIN = (".html", ".css", ".js", ".json", ".svg", ".wasm"), 1024
 
     def __init__(self, root: Path, allowed_hosts=None, home_link: bool = True):
         self.root = Path(root).resolve()
         self.allowed_hosts = allowed_hosts
         self.home_link = home_link
         self._newest: tuple[float, datetime | None] = (0.0, None)
+        #: path -> (stamp, home, gzipped body): compressed once per change of the file.
+        self._gzipped: dict[Path, tuple[tuple, str, bytes]] = {}
 
     def __call__(self, environ, start_response):
         if self.allowed_hosts is not None and not self.allowed_hosts(environ.get("HTTP_HOST", "")):
@@ -353,14 +371,36 @@ class StaticFiles:
                 or any(part.startswith(".") for part in file.relative_to(self.root).parts)
                 or file.suffix.lower() not in self.TYPES or not file.is_file()):
             return _plain(start_response, "404 Not Found", b"Not Found")
-        body = file.read_bytes()
         kind = self.TYPES[file.suffix.lower()]
-        if self.home_link and kind.startswith("text/html"):
-            body = self._with_home_link(body, environ.get("homepage.home", "/"))
-        start_response("200 OK", [("Content-Type", kind), ("Content-Length", str(len(body))),
-                                  ("Cache-Control", "no-cache"), ("Content-Security-Policy", self.CSP),
-                                  ("X-Content-Type-Options", "nosniff"), ("Referrer-Policy", "same-origin")])
+        stamp = _stamp(file)
+        home = environ.get("homepage.home", "/") if self.home_link and kind.startswith("text/html") else ""
+        packed = (file.suffix.lower() in self.GZIP_TYPES and stamp[1] >= self.GZIP_MIN
+                  and "gzip" in environ.get("HTTP_ACCEPT_ENCODING", "").lower())
+        tag = '"' + hashlib.sha1(f"{stamp}{home}".encode()).hexdigest()[:16] + ('-gz"' if packed else '"')
+        headers = [("Content-Type", kind), ("Cache-Control", "no-cache"), ("ETag", tag),
+                   ("Last-Modified", _http_date(stamp[0])), ("Vary", "Accept-Encoding"),
+                   ("Content-Security-Policy", self.CSP), ("X-Content-Type-Options", "nosniff"),
+                   ("Referrer-Policy", "same-origin")]
+        if tag in environ.get("HTTP_IF_NONE_MATCH", ""):
+            start_response("304 Not Modified", headers)
+            return [b""]
+        body = self._gzip(file, stamp, home) if packed else self._body(file, home)
+        if packed:
+            headers.append(("Content-Encoding", "gzip"))
+        start_response("200 OK", [*headers, ("Content-Length", str(len(body)))])
         return [body]
+
+    def _body(self, file: Path, home: str) -> bytes:
+        body = file.read_bytes()
+        return self._with_home_link(body, home) if home else body
+
+    def _gzip(self, file: Path, stamp: tuple, home: str) -> bytes:
+        kept = self._gzipped.get(file)
+        if kept and kept[:2] == (stamp, home):
+            return kept[2]
+        body = gzip.compress(self._body(file, home), compresslevel=6, mtime=0)
+        self._gzipped[file] = (stamp, home, body)
+        return body
 
     def _with_home_link(self, body: bytes, home: str) -> bytes:
         link = self.HOME_LINK.format(home=html.escape(home)).encode("utf-8")
@@ -420,6 +460,20 @@ def _read(path: Path) -> bytes:
         body = b""
     _files[path] = (stamp, body)
     return body
+
+
+def _http_date(mtime_ns: int) -> str:
+    from email.utils import formatdate
+    return formatdate(mtime_ns / 1_000_000_000, usegmt=True)
+
+
+def _preview_file(file: Path) -> dict:
+    """A folder site's preview, from the JSON file sites.toml names (read again when it changes):
+    {"title": "見出し", "note": "ひとこと", "items": [["文", "/path/in/the/site"], ...]}."""
+    data = json.loads(_read(file).decode("utf-8"))
+    items = [(text, path) for text, path in data.get("items", [])
+             if isinstance(text, str) and isinstance(path, str) and path.startswith("/")]
+    return {"title": str(data.get("title", "")), "note": str(data.get("note", "")), "items": items[:5]}
 
 
 def _version(path: Path) -> str:

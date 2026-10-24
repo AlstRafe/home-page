@@ -1,6 +1,7 @@
 """The front page ("/"), the sites under their paths, and sites.toml. Run: python -m unittest discover -s tests"""
 from __future__ import annotations
 
+import gzip
 import os
 import shutil
 import sys
@@ -16,17 +17,18 @@ H = "localhost"
 PUBLIC = "haruxera.tail1234.ts.net"
 
 
-def call(app, path, method="GET", host=H):
-    """One request: (status code, headers dict, body text)."""
-    raw, _, query = path.partition("?")
-    environ = {"REQUEST_METHOD": method, "PATH_INFO": raw, "QUERY_STRING": query, "SCRIPT_NAME": "",
-               "HTTP_HOST": host, "SERVER_NAME": "localhost", "wsgi.url_scheme": "http"}
+def call(app, path, method="GET", host=H, raw=False, **headers):
+    """One request: (status code, headers dict, body text, or bytes with raw=True).
+    ``headers``: request headers as environ keys (HTTP_IF_NONE_MATCH="...")."""
+    target, _, query = path.partition("?")
+    environ = {"REQUEST_METHOD": method, "PATH_INFO": target, "QUERY_STRING": query, "SCRIPT_NAME": "",
+               "HTTP_HOST": host, "SERVER_NAME": "localhost", "wsgi.url_scheme": "http", **headers}
     seen = {}
 
     def start_response(status, headers, exc_info=None):
         seen["status"], seen["headers"] = int(status.split()[0]), dict(headers)
     body = b"".join(app(environ, start_response))
-    return seen["status"], seen["headers"], body.decode("utf-8", "replace")
+    return seen["status"], seen["headers"], body if raw else body.decode("utf-8", "replace")
 
 
 def news(environ, start_response):
@@ -150,6 +152,53 @@ name = "Memo"
         self.assertIn('<a href="/" title="サイト一覧へ戻る"', body)
         self.assertLess(body.index("サイト一覧へ戻る"), body.index("</BODY>"))
         self.assertIn('<a class="open" href="/memo/">Memo を開く', call(self.portal, "/")[2])
+
+    def test_folder_files_are_sent_gzipped_and_not_again_while_unchanged(self):
+        script = self.game / "js" / "app.js"
+        script.write_text("var mission = 1;\n" * 400, encoding="utf-8")
+        status, headers, body = call(self.portal, "/infra/js/app.js", raw=True, HTTP_ACCEPT_ENCODING="gzip, br")
+        self.assertEqual((status, headers["Content-Encoding"], headers["Vary"]), (200, "gzip", "Accept-Encoding"))
+        self.assertEqual(gzip.decompress(body), script.read_bytes())
+        self.assertLess(len(body), script.stat().st_size // 5)
+        self.assertEqual(int(headers["Content-Length"]), len(body))
+        status, again, body = call(self.portal, "/infra/js/app.js", raw=True, HTTP_ACCEPT_ENCODING="gzip",
+                                   HTTP_IF_NONE_MATCH=headers["ETag"])
+        self.assertEqual((status, body), (304, b""))
+        self.assertEqual(again["ETag"], headers["ETag"])
+        status, plain, body = call(self.portal, "/infra/js/app.js", raw=True)  # no gzip: another tag
+        self.assertEqual(status, 200)
+        self.assertNotIn("Content-Encoding", plain)
+        self.assertNotEqual(plain["ETag"], headers["ETag"])
+        self.assertEqual(body, script.read_bytes())
+        script.write_text("var mission = 2;\n" * 400, encoding="utf-8")
+        later = time.time() + 5
+        os.utime(script, (later, later))
+        status, changed, body = call(self.portal, "/infra/js/app.js", raw=True, HTTP_ACCEPT_ENCODING="gzip",
+                                     HTTP_IF_NONE_MATCH=headers["ETag"])
+        self.assertEqual(status, 200)
+        self.assertNotEqual(changed["ETag"], headers["ETag"])
+        self.assertIn(b"mission = 2", gzip.decompress(body))
+        self.assertNotIn("Content-Encoding", call(self.portal, "/infra/", HTTP_ACCEPT_ENCODING="gzip")[1])  # small
+
+    def test_a_folder_site_shows_what_it_has_from_its_own_json(self):
+        (self.game / "portal.json").write_text(
+            '{"title": "すぐ遊べるミッション", "items": [["初日の当番", "/#/play/basics-01"], '
+            '["外へのリンク", "https://example.com/"], ["はじめてのコンテナ", "/#/play/docker-01"]]}', encoding="utf-8")
+        self.write(self.config.read_text(encoding="utf-8").replace('home_link = "own"', 'home_link = "own"\npreview = "portal.json"'))
+        page = call(self.portal, "/")[2]
+        self.assertIn('<p class="now-head">すぐ遊べるミッション<span>更新 ', page)
+        self.assertIn('<a href="/infra/#/play/basics-01">初日の当番</a>', page)
+        self.assertIn('<a href="/infra/#/play/docker-01">はじめてのコンテナ</a>', page)
+        self.assertNotIn("example.com", page)  # only paths of the site itself
+        (self.game / "portal.json").write_text("{broken", encoding="utf-8")
+        later = time.time() + 5
+        os.utime(self.game / "portal.json", (later, later))
+        status, _, page = call(self.portal, "/")
+        self.assertEqual(status, 200)
+        self.assertIn('<a href="/infra/">CoreLab</a>', page)
+        self.assertNotIn("初日の当番", page)
+        self.write(self.config.read_text(encoding="utf-8").replace('"portal.json"', '"../secret.js"'))
+        self.assertIn("preview はそのフォルダの中の .json", call(self.portal, "/")[2])
 
     def test_sites_toml_edits_show_without_a_restart_and_mistakes_are_explained_to_the_owner(self):
         self.write(self.config.read_text(encoding="utf-8") + '''

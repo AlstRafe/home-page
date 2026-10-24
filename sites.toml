@@ -28,6 +28,8 @@ listen = "network"   # "network": Tailscale・LAN・このPC / "local": このPC
 # open = "Memo を開く"             # ボタンの文言（省略すると「<name> を開く」）
 # public = false                   # テスト公開の名前では隠す（このPCとLANからだけ見える）。省略すると公開
 # home_link = "own"                # 自前の「サイト一覧へ戻る」リンクがあるとき。省略するとポータルが左下に付ける
+# preview = "portal.json"          # カードに並べる中身（そのフォルダの JSON。書き換えると一覧に即反映）:
+#                                  # {"title": "見出し", "items": [["文", "/サイト内のパス"], ...]}（最大 5 件）
 #
 # Python の Web アプリ（WSGI）は folder の代わりに python と entry を書く（サーバーの起動時に読み込む）:
 # python = "../MyApp"              # sys.path に足すフォルダ（requirements.txt があれば launcher が入れる）
@@ -55,3 +57,4 @@ icon = "terminal"
 accent = "teal"
 tags = ["インストール不要", "Linux 基礎から 19 ミッション", "架空データで安全"]
 home_link = "own"
+preview = "portal.json"            # 「すぐ遊べるミッション」（Infra Game 側で管理）

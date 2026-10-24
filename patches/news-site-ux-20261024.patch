@@ -1,0 +1,101 @@
+From d619f3c8edece0053ff044b0d00ae012e68bf87b Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=E7=A7=8B=E5=85=83=E6=82=A0=E5=90=BE?= <goolay002@gmail.com>
+Date: Sat, 24 Oct 2026 14:59:00 +0000
+Subject: [PATCH] =?UTF-8?q?Phones=20get=20the=20way=20back=20to=20the=20si?=
+ =?UTF-8?q?te=20list=20in=20the=20tab=20bar=20(the=20top=20menu's=20?=
+ =?UTF-8?q?=E3=82=B5=E3=82=A4=E3=83=88=E4=B8=80=E8=A6=A7=20is=20hidden=20t?=
+ =?UTF-8?q?here),=20and=20the=20site=20list's=20preview=20shows=20headline?=
+ =?UTF-8?q?s=20translated=20already=20before=20untranslated=20ones?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_019nmXLPPXxbKYnCPMY8Sj4p
+---
+ newsreader/hosting.py           |  9 ++++++---
+ newsreader/static/editorial.css |  2 ++
+ newsreader/templates/base.html  |  2 +-
+ tests/test_portal.py            | 11 +++++++++++
+ 4 files changed, 20 insertions(+), 4 deletions(-)
+
+diff --git a/newsreader/hosting.py b/newsreader/hosting.py
+index d0fa30e..dc8ef47 100644
+--- a/newsreader/hosting.py
++++ b/newsreader/hosting.py
+@@ -104,13 +104,16 @@ def news_now(news_app) -> dict:
+     from newsreader.web.status_view import status_data
+     db = news_app.config["LIBRARY_DB"]
+     with news_app.test_request_context("/"):  # front_stories builds picture URLs
+-        stories = front_stories(db)[:PREVIEW]
++        # More than are shown: the front page is read in Japanese, so headlines translated already go
++        # first (an hour's new Korean or English headline waits until someone has opened it here).
++        stories = front_stories(db)
+         if stories:
+             rows = [(s["lead_title"], f"/stories/{quote(s['key'])}") for s in stories]
+         else:
+-            rows = [(a["title"], f"/a/{a['id']}") for a in index.list_articles(db, page=1, per_page=PREVIEW)["items"]]
++            rows = [(a["title"], f"/a/{a['id']}") for a in index.list_articles(db, page=1, per_page=PREVIEW * 3)["items"]]
+         kept = translation.cached_titles([title for title, _ in rows], "ja")
+         badge = status.badge(status_data(), collects=collects_hourly())
++    shown = sorted(zip(rows, kept), key=lambda row: not row[1])[:PREVIEW]  # stable: newest first within each
+     return {"title": "各社が伝えた話題" if stories else "新着記事",
+             "note": badge["label"] if badge.get("tone") != "idle" else "",
+-            "items": [(ja or title, path) for (title, path), ja in zip(rows, kept)]}
++            "items": [(ja or title, path) for (title, path), ja in shown]}
+diff --git a/newsreader/static/editorial.css b/newsreader/static/editorial.css
+index 238fd9e..6c23cf0 100644
+--- a/newsreader/static/editorial.css
++++ b/newsreader/static/editorial.css
+@@ -96,6 +96,8 @@ input,select,textarea{background:var(--sheet);color:var(--ink);border:1px solid
+ .tabbar a{min-height:48px!important;font-size:13px!important;font-weight:600!important;color:var(--soft)!important;letter-spacing:.06em;
+   border-top:2px solid transparent;margin-top:-1px;}
+ .tabbar a[aria-current="page"]{color:var(--ink)!important;border-top-color:var(--accent);}
++/* Under the Home Page server: the way back to the site list, which the phone's hidden top menu had alone */
++.tabbar a.tab-home{font-size:12px!important;letter-spacing:0;}
+ 
+ /* pressed states and word lists: ink, not candy colours */
+ .segmented{background:none;border:1px solid var(--rule-strong);padding:0;}
+diff --git a/newsreader/templates/base.html b/newsreader/templates/base.html
+index 73bbbbf..ad19dfc 100644
+--- a/newsreader/templates/base.html
++++ b/newsreader/templates/base.html
+@@ -11,5 +11,5 @@
+ <nav class="foot-links" aria-label="サイト内の案内">{% if request.script_root %}<a href="{{ request.script_root.rpartition('/')[0] }}/">← サイト一覧</a>{% endif %}<a href="{{ url_for('index') }}">記事</a><a href="{{ url_for('stories_page') }}">読み比べ</a><a href="{{ url_for('digest_page') }}">今日のまとめ</a><a href="{{ url_for('outlets_page') }}">媒体くらべ</a>{% if not visitor() %}<a href="{{ url_for('saved_page') }}">保存した記事</a><a href="{{ url_for('words_page') }}">単語帳</a><a href="{{ url_for('status_page') }}">取得の状況</a><a href="{{ url_for('translation_settings') }}">設定</a>{% endif %}</nav>
+ <p class="foot-outlets">収録している媒体　{% for name, where in outlet_intro %}<span>{{ name }}<small>{{ where }}</small></span>{% endfor %}</p>
+ <p class="foot-note">記事の著作権は各配信元に帰属します。訳文は機械翻訳（Microsoft Translator）によるもので、誤りを含むことがあります。正確な内容は原文でご確認ください。</p></div></footer>
+-<nav class="tabbar" aria-label="メインメニュー（下）"><a href="{{ url_for('index') }}"{% if request.endpoint in ('index', 'show_article') %} aria-current="page"{% endif %}>記事</a><a href="{{ url_for('stories_page') }}"{% if request.endpoint in ('stories_page', 'story_page') %} aria-current="page"{% endif %}>読み比べ</a><a href="{{ url_for('digest_page') }}"{% if request.endpoint in ('digest_page', 'outlets_page') %} aria-current="page"{% endif %}>まとめ</a>{% if not visitor() %}<a href="{{ url_for('saved_page') }}"{% if request.endpoint in ('saved_page', 'words_page') %} aria-current="page"{% endif %}>保存</a><a href="{{ url_for('translation_settings') }}"{% if request.endpoint == 'translation_settings' %} aria-current="page"{% endif %}>設定</a>{% endif %}</nav>
++<nav class="tabbar" aria-label="メインメニュー（下）"><a href="{{ url_for('index') }}"{% if request.endpoint in ('index', 'show_article') %} aria-current="page"{% endif %}>記事</a><a href="{{ url_for('stories_page') }}"{% if request.endpoint in ('stories_page', 'story_page') %} aria-current="page"{% endif %}>読み比べ</a><a href="{{ url_for('digest_page') }}"{% if request.endpoint in ('digest_page', 'outlets_page') %} aria-current="page"{% endif %}>まとめ</a>{% if not visitor() %}<a href="{{ url_for('saved_page') }}"{% if request.endpoint in ('saved_page', 'words_page') %} aria-current="page"{% endif %}>保存</a><a href="{{ url_for('translation_settings') }}"{% if request.endpoint == 'translation_settings' %} aria-current="page"{% endif %}>設定</a>{% endif %}{% if request.script_root %}<a class="tab-home" href="{{ request.script_root.rpartition('/')[0] }}/">サイト一覧</a>{% endif %}</nav>
+ {% block scripts %}{% endblock %}<script type="speculationrules">{{ (speculation_rules_visitor if visitor() else speculation_rules)|safe }}</script><script src="{{ asset('app.js') }}" defer></script></body></html>
+diff --git a/tests/test_portal.py b/tests/test_portal.py
+index 1f8b428..598e167 100644
+--- a/tests/test_portal.py
++++ b/tests/test_portal.py
+@@ -58,6 +58,7 @@ class PortalTests(Library):
+         # the way back to the front page, in the top menu and the footer
+         self.assertIn('<a class="nav-text" href="/">サイト一覧</a>', page)
+         self.assertIn('<a href="/">← サイト一覧</a>', page)
++        self.assertIn('<a class="tab-home" href="/">サイト一覧</a></nav>', page)  # phones: the tab bar
+         self.assertEqual(self.client.get(f"/news/a/{self.article}", headers=H).status_code, 200)
+         response = self.client.get("/news", headers=H)
+         self.assertEqual((response.status_code, response.headers["Location"]), (302, "/news/"))
+@@ -156,6 +157,16 @@ class HostingTests(Library):
+         self.assertEqual(now["items"][0][1], f"/a/{self.article}")
+         self.assertIsInstance(made["version"](), str)
+ 
++    def test_the_front_pages_preview_puts_translated_headlines_first(self):
++        stories = [{"lead_title": f"Headline {n}", "key": f"s{n}"} for n in range(1, 6)]
++        kept = {"Headline 2": "見出し2", "Headline 4": "見出し4"}
++        with unittest.mock.patch("newsreader.web.pages.front_stories", return_value=stories), \
++                unittest.mock.patch("newsreader.services.translation.cached_titles",
++                                    side_effect=lambda titles, target: [kept.get(t, "") for t in titles]):
++            now = hosting.news_now(self.app)
++        self.assertEqual(now["title"], "各社が伝えた話題")
++        self.assertEqual(now["items"], [("見出し2", "/stories/s2"), ("見出し4", "/stories/s4"), ("Headline 1", "/stories/s1")])
++
+     def test_the_host_takes_over_the_start_at_logon(self):
+         from newsreader.services import settings
+         with unittest.mock.patch.object(hosting, "HOSTED_PATH", self.tmp / "instance" / "hosted.json"), \
+-- 
+2.43.0
+
