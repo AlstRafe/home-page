@@ -247,6 +247,62 @@ def open_log():
     return log
 
 
+def python_site_servers() -> list[int]:
+    """Processes that serve a Python site of sites.toml on their own (its launcher.py or app.py,
+    never its collector): what ``--take-over`` stops. Windows only."""
+    try:
+        data = tomllib.loads(CONFIG.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return []
+    folders = [str((CONFIG.parent / entry["python"]).resolve()).casefold() for entry in data.get("site", [])
+               if isinstance(entry, dict) and isinstance(entry.get("python"), str)]
+    if os.name != "nt" or not folders:
+        return []
+    listing = subprocess.run(["powershell", "-NoProfile", "-Command",
+                              "Get-CimInstance Win32_Process | ForEach-Object { \"$($_.ProcessId)`t$($_.CommandLine)\" }"],
+                             capture_output=True, text=True, errors="replace", creationflags=CREATE_NO_WINDOW).stdout
+    found = []
+    for line in listing.splitlines():
+        pid, _, command = line.partition("\t")
+        command = command.casefold()
+        if pid.isdecimal() and any(f"{folder}\\{name}" in command for folder in folders for name in ("launcher.py", "app.py")):
+            found.append(int(pid))
+    return found
+
+
+def take_over(port: int) -> int:
+    """Make this the server of the PC's sites from now on: register the start at logon, stop the
+    Python sites' own servers (News Site's launcher and app.py), and start this one in the background."""
+    prepare_runtime()
+    ensure_logon_task(True)
+    if not TASK_RECORD.is_file():
+        print("ログオン時の自動起動を登録できなかったので、切り替えを中止しました。", file=sys.stderr)
+        return 1
+    stopped = python_site_servers()
+    for pid in stopped:  # the launchers first are among them: none of them starts the app again
+        subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True, text=True, errors="replace")
+    if stopped:
+        print(f"これまでのサーバーを止めました（{len(stopped)} 個のプロセス）。")
+    deadline = time.monotonic() + 20
+    while answering(port) and time.monotonic() < deadline:
+        time.sleep(1)
+    if answering(port):
+        print(f"ポート {port} がまだ使われています。使っているプログラムを止めてからやり直してください。", file=sys.stderr)
+        return 1
+    scheduler = shutil.which("schtasks.exe") or "schtasks"
+    subprocess.run([scheduler, "/Run", "/TN", TASK_NAME], capture_output=True, text=True, errors="replace")
+    print("Home Page のサーバーを起動しています...", flush=True)
+    deadline = time.monotonic() + 180
+    while not answering(port):
+        if time.monotonic() > deadline:
+            print(f"起動を確認できませんでした。{LOG_PATH} を見てください。", file=sys.stderr)
+            return 1
+        time.sleep(2)
+    print(f"切り替えました。サイト一覧: http://127.0.0.1:{port}/ （記録: {LOG_PATH}）")
+    webbrowser.open(f"http://127.0.0.1:{port}/")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if sys.version_info < (3, 11):
@@ -256,6 +312,8 @@ def main(argv: list[str] | None = None) -> int:
     if "--no-logon" in argv:
         ensure_logon_task(False)
         return 0
+    if "--take-over" in argv:
+        return take_over(port)
     if "--background" in argv:
         sys.stdout = sys.stderr = open_log()
         if answering(port):
