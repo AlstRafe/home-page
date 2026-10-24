@@ -1,0 +1,686 @@
+From e696d3e2a98a2cc7cece8752e85d1be00f41d547 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=E7=A7=8B=E5=85=83=E6=82=A0=E5=90=BE?= <goolay002@gmail.com>
+Date: Sat, 24 Oct 2026 13:11:57 +0900
+Subject: [PATCH] Front page from the Home Page project: News Site hands itself
+ to the portal in the Home Page folder as the app "news" (its sites.toml lists
+ the sites, CoreLab under /infra among them), the supervised server restarts
+ when that code changes, and without the folder "/" goes straight to News Site
+
+The portal (routing, the list page, serving folder sites such as CoreLab) moved to
+~/Documents/Claude/Home Page (HOME_PAGE_DIR overrides), so a site is added there by
+editing sites.toml, without a change here. newsreader/portal now only loads its
+homepage package (contract homepage.API == 1), passes News Site with its preview
+(the stories several outlets carried, and the collection badge), keeps the old
+addresses (/a/123 -> /news/a/123, /relay/ answered in place), and marks the public
+(Funnel) name https with HSTS and noindex for every site on it. A missing, broken or
+different Home Page leaves News Site served alone: "/" redirects to /news/.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ newsreader/portal/__init__.py | 280 +++++++++++++++-------------------
+ newsreader/portal/index.html  |  26 ----
+ newsreader/portal/portal.css  |  23 ---
+ newsreader/web/run.py         |  16 +-
+ tests/test_portal.py          | 164 +++++++++++++-------
+ 5 files changed, 245 insertions(+), 264 deletions(-)
+ delete mode 100644 newsreader/portal/index.html
+ delete mode 100644 newsreader/portal/portal.css
+
+diff --git a/newsreader/portal/__init__.py b/newsreader/portal/__init__.py
+index 35295ad..76e1d8b 100644
+--- a/newsreader/portal/__init__.py
++++ b/newsreader/portal/__init__.py
+@@ -1,30 +1,83 @@
+-"""The front page of this PC's sites: "/" lists the sites, each site lives under its own path.
+-
+-News Site (newsreader.web) is mounted at ``/news`` (it builds every link with ``url_for``, so it
+-only needs ``SCRIPT_NAME``). Addresses from before the mount keep working: a page address
+-(``/a/123``, a bookmark) is redirected to the same page under ``/news``; the translation relay
+-(``/relay/...``, called by test builds with a fixed address) is answered where it always was.
+-CoreLab (the Infra Game project's training game, static files) is served under ``/infra`` when its
+-folder is on this PC.
++"""The front page of this PC's sites ("/"): served by the Home Page project, with News Site under ``/news``.
++
++The Home Page folder (``HOME_PAGE_DIR``, else ``~/Documents/Claude/Home Page``) holds the portal:
++the site list (sites.toml), the page, and how the other sites (CoreLab under ``/infra``) are served.
++Its ``homepage`` package gets News Site here as the app named "news", with what it has now for the
++list. Without that folder (another PC, a test build), or when it cannot be loaded, "/" goes straight
++to News Site. A supervised server restarts when the Home Page code changes (``code_changed``).
++
++Either way, addresses from before the mount keep working: a page address (``/a/123``, a bookmark)
++is redirected to the same page under ``/news``; the translation relay (``/relay/...``, called by
++test builds with a fixed address) is answered where it always was. The public name (テスト公開)
++is marked https and kept out of search results for every site on it.
+ """
+ from __future__ import annotations
+ 
+-import html
++import importlib.util
+ import os
++import sys
+ from pathlib import Path
+ from urllib.parse import quote
+ 
+ NEWS_MOUNT = "/news"
+-INFRA_MOUNT = "/infra"
+ #: Answered at the old address too (POST from test builds; urllib does not follow a redirect for it).
+ LEGACY_DIRECT = ("/relay/",)
+-_HERE = Path(__file__).resolve().parent
+-
++#: Under /news, for crawlers to leave alone.
++NEWS_DISALLOW = ("/api/",)
++#: The homepage package's contract this code is written for (homepage.API).
++HOME_PAGE_API = 1
+ 
+ #: Crawlers may read pages (link previews come from them) but not call the APIs or the relay.
+ ROBOTS = b"User-agent: *\nDisallow: /news/api/\nDisallow: /relay/\n"
+ 
+ 
++def home_page_dir() -> Path:
++    """The Home Page project's folder (``HOME_PAGE_DIR`` overrides)."""
++    return Path(os.environ.get("HOME_PAGE_DIR") or Path.home() / "Documents" / "Claude" / "Home Page")
++
++
++def _code_stamp(folder: Path) -> tuple:
++    """What the Home Page code is now: its files' names, sizes and times ((): not there)."""
++    package = folder / "homepage"
++    try:
++        return tuple(sorted((str(file.relative_to(package)), file.stat().st_mtime_ns, file.stat().st_size)
++                            for file in package.rglob("*.py") if "__pycache__" not in file.parts))
++    except OSError:
++        return ()
++
++
++#: The Home Page code the last build used, to see when it changed.
++_built_from: tuple[Path, tuple] | None = None
++
++
++def code_changed() -> bool:
++    """Whether the Home Page code differs from what the last ``build`` loaded (it came, went, or was edited)."""
++    if _built_from is None:
++        return False
++    folder, stamp = _built_from
++    return home_page_dir() != folder or _code_stamp(folder) != stamp
++
++
++def _load_home_page(folder: Path):
++    """The ``homepage`` package from ``folder``, or None (not there, broken, or another contract)."""
++    init = folder / "homepage" / "__init__.py"
++    if not init.is_file():
++        return None
++    try:
++        spec = importlib.util.spec_from_file_location("homepage", init, submodule_search_locations=[str(init.parent)])
++        module = importlib.util.module_from_spec(spec)
++        sys.modules["homepage"] = module
++        spec.loader.exec_module(module)
++    except Exception as exc:  # noqa: BLE001 - a broken Home Page never keeps News Site down
++        sys.modules.pop("homepage", None)
++        print(f"サイト一覧（{folder}）を読み込めませんでした: {exc!r}。News Site だけを配信します。", flush=True)
++        return None
++    if getattr(module, "API", None) != HOME_PAGE_API:
++        print(f"サイト一覧（{folder}）の版が合いません（API {getattr(module, 'API', None)}）。News Site だけを配信します。", flush=True)
++        return None
++    return module
++
++
+ def _public_headers(start_response):
+     """For the public name: https only from now on, and no search-engine listing (a test, for people sent the link)."""
+     def start(status, headers, exc_info=None):
+@@ -33,167 +86,79 @@ def _public_headers(start_response):
+     return start
+ 
+ 
+-class Site:
+-    """``preview`` (optional) returns what the site has now: {"note": str, "items": [(text, path)]},
+-    path relative to the site; the index shows it under the description. Errors show nothing."""
++class Public:
++    """WSGI around the whole server: requests under the public name (a TLS proxy, テスト公開) are https
++    (share previews need absolute https URLs) and their answers carry the headers above."""
+ 
+-    def __init__(self, mount: str, name: str, subtitle: str, description: str, app, preview=None):
+-        self.mount, self.name, self.subtitle, self.description, self.app = mount, name, subtitle, description, app
+-        self.preview = preview
++    def __init__(self, app, public_hosts):
++        self.app, self.public_hosts = app, public_hosts
+ 
+-    def preview_html(self) -> str:
+-        try:
+-            now = self.preview() if self.preview else None
+-        except Exception:  # noqa: BLE001 - the index never fails because a site's preview did
+-            now = None
+-        if not now:
+-            return ""
+-        items = "".join(f'<li><a href="{html.escape(self.mount + path)}">{html.escape(text)}</a></li>'
+-                        for text, path in now.get("items", []))
+-        note = f'<p class="note">{html.escape(now["note"])}</p>' if now.get("note") else ""
+-        return note + (f'<ul class="now">{items}</ul>' if items else "")
++    def __call__(self, environ, start_response):
++        if self.public_hosts(environ.get("HTTP_HOST", "")):
++            environ = dict(environ, **{"wsgi.url_scheme": "https"})
++            start_response = _public_headers(start_response)
++        return self.app(environ, start_response)
+ 
+ 
+-class Portal:
+-    """WSGI: "/" is the index, ``/<site>/...`` goes to that site's app."""
++class NewsOnly:
++    """WSGI without the Home Page: News Site under /news, "/" and the old addresses lead there."""
+ 
+-    def __init__(self, sites: list[Site], allowed_hosts=None, public_hosts=None):
+-        self.sites = sites
+-        self.allowed_hosts = allowed_hosts  # callable(host) -> bool, or None for any
+-        # callable(host) -> bool: names the public reaches through a TLS proxy (テスト公開). Their
+-        # links are built as https (share previews need absolute https URLs) and kept out of search results.
+-        self.public_hosts = public_hosts
+-        self.page = (_HERE / "index.html").read_text(encoding="utf-8")
+-        self.css = (_HERE / "portal.css").read_bytes()
++    def __init__(self, news_app):
++        self.news_app = news_app
+ 
+     def __call__(self, environ, start_response):
+         path = environ.get("PATH_INFO", "") or "/"
+         method = environ.get("REQUEST_METHOD", "GET")
+-        if self.public_hosts is not None and self.public_hosts(environ.get("HTTP_HOST", "")):
+-            environ = dict(environ, **{"wsgi.url_scheme": "https"})
+-            start_response = _public_headers(start_response)
+-        for site in self.sites:
+-            if path == site.mount:
+-                return self._redirect(start_response, site.mount + "/", environ)
+-            if path.startswith(site.mount + "/"):
+-                environ = dict(environ, SCRIPT_NAME=environ.get("SCRIPT_NAME", "") + site.mount,
+-                               PATH_INFO=path[len(site.mount):])
+-                return site.app(environ, start_response)
+-        if path in ("/", "/portal.css", "/robots.txt"):
+-            if self.allowed_hosts is not None and not self.allowed_hosts(environ.get("HTTP_HOST", "")):
+-                return self._plain(start_response, "400 Bad Request", b"Bad Request")
+-            if method not in ("GET", "HEAD"):
+-                return self._plain(start_response, "405 Method Not Allowed", b"Method Not Allowed")
+-            if path == "/portal.css":
+-                return self._send(start_response, "text/css; charset=utf-8", self.css, "public, max-age=3600")
+-            if path == "/robots.txt":
+-                return self._send(start_response, "text/plain; charset=utf-8", ROBOTS, "public, max-age=86400")
+-            return self._send(start_response, "text/html; charset=utf-8", self._index().encode("utf-8"), "no-cache")
+-        main = self.sites[0]
++        if path.startswith(NEWS_MOUNT + "/"):
++            environ = dict(environ, SCRIPT_NAME=environ.get("SCRIPT_NAME", "") + NEWS_MOUNT,
++                           PATH_INFO=path[len(NEWS_MOUNT):])
++            return self.news_app(environ, start_response)
++        if path == "/robots.txt" and method in ("GET", "HEAD"):
++            start_response("200 OK", [("Content-Type", "text/plain; charset=utf-8"), ("Content-Length", str(len(ROBOTS))),
++                                      ("Cache-Control", "public, max-age=86400")])
++            return [ROBOTS]
+         if path.startswith(LEGACY_DIRECT) or method not in ("GET", "HEAD"):
+-            return main.app(environ, start_response)
+-        return self._redirect(start_response, main.mount + path, environ, permanent=True)
+-
+-    def _index(self) -> str:
+-        rows = "\n".join(
+-            f'<li><span class="no">{n:02d}</span><div><a href="{html.escape(s.mount)}/">{html.escape(s.name)}</a>'
+-            f'<span class="sub">{html.escape(s.subtitle)}</span>'
+-            f'<p>{html.escape(s.description)}</p>{s.preview_html()}</div></li>' for n, s in enumerate(self.sites, 1))
+-        from datetime import datetime, timedelta, timezone
+-        today = datetime.now(timezone(timedelta(hours=9)))
+-        date = f"{today.year}年{today.month}月{today.day}日（{'月火水木金土日'[today.weekday()]}）"
+-        return self.page.replace("{{ sites }}", rows).replace("{{ date }}", date).replace("{{ count }}", str(len(self.sites)))
+-
+-    @staticmethod
+-    def _headers(content_type: str, length: int, cache: str) -> list[tuple[str, str]]:
+-        return [("Content-Type", content_type), ("Content-Length", str(length)), ("Cache-Control", cache),
+-                ("Content-Security-Policy", "default-src 'none'; style-src 'self'; img-src 'self'; "
+-                                            "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"),
+-                ("X-Content-Type-Options", "nosniff"), ("Referrer-Policy", "same-origin")]
+-
+-    def _send(self, start_response, content_type: str, body: bytes, cache: str):
+-        start_response("200 OK", self._headers(content_type, len(body), cache))
+-        return [body]
+-
+-    @staticmethod
+-    def _plain(start_response, status: str, body: bytes):
+-        start_response(status, [("Content-Type", "text/plain; charset=utf-8"), ("Content-Length", str(len(body)))])
+-        return [body]
+-
+-    @staticmethod
+-    def _redirect(start_response, target: str, environ, permanent: bool = False):
+-        query = environ.get("QUERY_STRING", "")
+-        location = quote(target, safe="/%:@!$&'()*+,;=-._~") + (f"?{query}" if query else "")
+-        start_response("308 Permanent Redirect" if permanent else "302 Found",
+-                       [("Location", location), ("Content-Length", "0")])
+-        return [b""]
+-
+-
+-class StaticFiles:
+-    """WSGI: one folder's files, read only ("/" is its index.html). Nothing outside the folder,
+-    no dot files or folders (.git, .claude), only the file types below."""
+-
+-    TYPES = {".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",
+-             ".js": "text/javascript; charset=utf-8", ".json": "application/json", ".svg": "image/svg+xml",
+-             ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".ico": "image/x-icon",
+-             ".woff2": "font/woff2"}
+-    #: The game's own scripts only; it sets inline style attributes and a data: favicon, and fetches nothing.
+-    CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+-           "connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+-
+-    def __init__(self, root: Path, allowed_hosts=None):
+-        self.root = Path(root).resolve()
+-        self.allowed_hosts = allowed_hosts
++            return self.news_app(environ, start_response)
++        if path in ("/", NEWS_MOUNT):
++            return _redirect(start_response, NEWS_MOUNT + "/", environ)
++        return _redirect(start_response, NEWS_MOUNT + path, environ, permanent=True)
+ 
+-    def __call__(self, environ, start_response):
+-        if self.allowed_hosts is not None and not self.allowed_hosts(environ.get("HTTP_HOST", "")):
+-            return Portal._plain(start_response, "400 Bad Request", b"Bad Request")
+-        if environ.get("REQUEST_METHOD", "GET") not in ("GET", "HEAD"):
+-            return Portal._plain(start_response, "405 Method Not Allowed", b"Method Not Allowed")
+-        parts = [part for part in environ.get("PATH_INFO", "").split("/") if part] or ["index.html"]
+-        file = self.root.joinpath(*parts).resolve()
+-        # The resolved path is checked too: on Windows a short name (CLAUDE~1) reaches a dot folder
+-        # that the address never names.
+-        if (any(part.startswith(".") or "\\" in part or ":" in part or "~" in part for part in parts)
+-                or not file.is_relative_to(self.root)
+-                or any(part.startswith(".") for part in file.relative_to(self.root).parts)
+-                or file.suffix.lower() not in self.TYPES or not file.is_file()):
+-            return Portal._plain(start_response, "404 Not Found", b"Not Found")
+-        body = file.read_bytes()
+-        start_response("200 OK", [("Content-Type", self.TYPES[file.suffix.lower()]), ("Content-Length", str(len(body))),
+-                                  ("Cache-Control", "no-cache"), ("Content-Security-Policy", self.CSP),
+-                                  ("X-Content-Type-Options", "nosniff"), ("Referrer-Policy", "same-origin")])
+-        return [body]
+-
+-
+-def infra_game_dir() -> Path:
+-    """The Infra Game project's folder (``INFRA_GAME_DIR`` overrides)."""
+-    return Path(os.environ.get("INFRA_GAME_DIR") or Path.home() / "Documents" / "Claude" / "Infra Game")
+-
+-
+-def build(news_app) -> Portal:
+-    """The sites of this PC behind one address: News Site, and CoreLab when its folder is here."""
++
++def _redirect(start_response, target: str, environ, permanent: bool = False):
++    query = environ.get("QUERY_STRING", "")
++    location = quote(target, safe="/%:@!$&'()*+,;=-._~") + (f"?{query}" if query else "")
++    start_response("308 Permanent Redirect" if permanent else "302 Found",
++                   [("Location", location), ("Content-Length", "0")])
++    return [b""]
++
++
++def build(news_app):
++    """The whole server: the Home Page's front page and sites with News Site among them, or News Site alone."""
++    global _built_from
+     from newsreader import branding
+     from newsreader.web import public, security
+-    news = Site(NEWS_MOUNT, branding.APP_NAME, branding.APP_TAGLINE,
+-                "BBC・中央社・聯合ニュースと、技術系の InfoQ・iThome などを毎時取得。原文と訳を並べ、同じニュースを各社で比べる。",
+-                news_app, preview=lambda: news_now(news_app))
+     trusted = news_app.config["TRUSTED_HOSTS_SET"]
++
+     def allowed(host: str) -> bool:
+         host = security.host_without_port(host)
+         return host in trusted or public.is_funnel_host(host)  # テスト公開 (web/public.py)
+-    sites = [news]  # the first site also answers the old addresses
+-    game = infra_game_dir()
+-    if (game / "index.html").is_file():
+-        sites.append(Site(INFRA_MOUNT, "CoreLab", "インフラ運用トレーニングゲーム",
+-                          "Kubernetes・Docker・Harbor・OpenShift・AWS のよくある障害を、ブラウザの中のターミナルで"
+-                          "解決しながら学ぶ。インストール不要、操作はすべて架空データのシミュレーション。",
+-                          StaticFiles(game, allowed)))
+-    return Portal(sites, allowed_hosts=allowed,
+-                  public_hosts=lambda host: public.is_funnel_host(security.host_without_port(host)))
+-
+-
+-#: Headlines the index shows from the news site.
++
++    def visitor(host: str) -> bool:
++        return public.is_funnel_host(security.host_without_port(host))
++
++    folder = home_page_dir()
++    _built_from = (folder, _code_stamp(folder))
++    home = _load_home_page(folder)
++    if home is None:
++        site = NewsOnly(news_app)
++    else:
++        news = home.App("news", NEWS_MOUNT, news_app, branding.APP_NAME, branding.APP_TAGLINE,
++                        preview=lambda: news_now(news_app), disallow=NEWS_DISALLOW, legacy=LEGACY_DIRECT)
++        site = home.build([news], allowed_hosts=allowed, visitor_hosts=visitor)
++    return Public(site, visitor)
++
++
++#: Headlines the front page shows from the news site.
+ NEWS_PREVIEW = 3
+ 
+ 
+@@ -214,5 +179,6 @@ def news_now(news_app) -> dict:
+         from newsreader.services.settings import collects_hourly
+         from newsreader.web.status_view import status_data
+         badge = status.badge(status_data(), collects=collects_hourly())
+-    return {"note": badge["label"] if badge.get("tone") != "idle" else "",
++    return {"title": "各社が伝えた話題" if stories else "新着記事",
++            "note": badge["label"] if badge.get("tone") != "idle" else "",
+             "items": [(ja or title, path) for (title, path), ja in zip(rows, kept)]}
+diff --git a/newsreader/portal/index.html b/newsreader/portal/index.html
+deleted file mode 100644
+index 71f84d8..0000000
+--- a/newsreader/portal/index.html
++++ /dev/null
+@@ -1,26 +0,0 @@
+-<!doctype html>
+-<html lang="ja">
+-<head>
+-<meta charset="utf-8">
+-<meta name="viewport" content="width=device-width,initial-scale=1">
+-<meta name="color-scheme" content="light dark">
+-<meta name="format-detection" content="telephone=no">
+-<title>サイト一覧</title>
+-<meta name="description" content="このパソコンから配信しているサイトの一覧。">
+-<link rel="stylesheet" href="/portal.css">
+-</head>
+-<body>
+-<header>
+-<p class="date">{{ date }}</p>
+-<h1>サイト一覧</h1>
+-</header>
+-<main>
+-<ol class="sites">
+-{{ sites }}
+-</ol>
+-</main>
+-<footer>
+-<p>このパソコンから配信しているサイト　{{ count }} 件</p>
+-</footer>
+-</body>
+-</html>
+diff --git a/newsreader/portal/portal.css b/newsreader/portal/portal.css
+deleted file mode 100644
+index 15a3c61..0000000
+--- a/newsreader/portal/portal.css
++++ /dev/null
+@@ -1,23 +0,0 @@
+-:root{--paper:#f5f3ee;--ink:#1c1b19;--soft:#6b6862;--rule:#d8d4cb;--accent:#a3231d;}
+-@media (prefers-color-scheme:dark){:root{--paper:#171614;--ink:#e9e6df;--soft:#9b978f;--rule:#3a3833;--accent:#e0675e;}}
+-*{box-sizing:border-box;}
+-html{background:var(--paper);color:var(--ink);-webkit-text-size-adjust:100%;}
+-body{margin:0 auto;max-width:44rem;padding:3.5rem 1.25rem 2.5rem;font:16px/1.75 "Hiragino Sans","Yu Gothic UI","Meiryo",system-ui,sans-serif;}
+-header{border-bottom:2px solid var(--ink);padding-bottom:.6rem;margin-bottom:.4rem;}
+-.date{margin:0;font-size:.82rem;color:var(--soft);letter-spacing:.04em;}
+-h1{margin:.1rem 0 0;font:600 1.9rem/1.3 "Hiragino Mincho ProN","Yu Mincho","YuMincho","Noto Serif JP",serif;letter-spacing:.06em;}
+-.sites{list-style:none;margin:0;padding:0;}
+-.sites li{display:grid;grid-template-columns:2.6rem 1fr;gap:.2rem;padding:1.35rem 0 1.2rem;border-bottom:1px solid var(--rule);}
+-.no{font:500 .95rem/2.2 ui-monospace,"SFMono-Regular",Consolas,monospace;color:var(--soft);}
+-.sites a{font:600 1.45rem/1.4 "Hiragino Mincho ProN","Yu Mincho","YuMincho","Noto Serif JP",serif;color:var(--ink);text-decoration:none;}
+-.sites a:hover,.sites a:focus-visible{text-decoration:underline;text-decoration-color:var(--accent);text-decoration-thickness:2px;text-underline-offset:.25em;}
+-.sites a:focus-visible{outline:none;}
+-.sub{display:block;font-size:.9rem;color:var(--accent);margin-top:.1rem;}
+-.sites p{margin:.45rem 0 0;color:var(--soft);font-size:.92rem;}
+-footer{margin-top:2.2rem;font-size:.8rem;color:var(--soft);}
+-footer p{margin:0;}
+-@media (max-width:30rem){body{padding-top:2rem;}h1{font-size:1.6rem;}.sites li{grid-template-columns:2.1rem 1fr;}.sites a{font-size:1.3rem;}}
+-.note{margin:.7rem 0 .2rem!important;font-size:.78rem!important;letter-spacing:.04em;}
+-.now{list-style:none;margin:.2rem 0 0;padding:0;}
+-.sites .now li{display:block;border-top:1px solid var(--rule);border-bottom:0;padding:.45rem 0;}
+-.sites .now a{font:600 .98rem/1.6 "Hiragino Mincho ProN","Yu Mincho","YuMincho","Noto Serif JP",serif!important;}
+diff --git a/newsreader/web/run.py b/newsreader/web/run.py
+index c9066ce..6bdfa5d 100644
+--- a/newsreader/web/run.py
++++ b/newsreader/web/run.py
+@@ -52,12 +52,13 @@ def _bindable(host: str, port: int) -> bool:
+ 
+ def serve_until_redeployed(app, host: str, port: int, poll_seconds: float = VERSION_POLL_SECONDS,
+                            supervised: bool = True, also: tuple[str, ...] = (),
+-                           network=None) -> int:
++                           network=None, changed=None) -> int:
+     """Serve on ``host`` and, when they can be bound, on the addresses in ``also`` as well.
+ 
+     ``network``: returns the extra addresses this PC has now; when one appears that is not
+     being answered on (Tailscale or the LAN came up after the start), the server restarts
+-    the same way as for a deployment, so it picks the address up."""
++    the same way as for a deployment, so it picks the address up. ``changed``: returns True
++    when other code the server loaded changed (the Home Page's), which restarts it the same way."""
+     from waitress.server import BaseWSGIServer, create_server
+ 
+     # an extra address that is not on this PC (yet) is left out on its own, never with the others
+@@ -93,9 +94,13 @@ def serve_until_redeployed(app, host: str, port: int, poll_seconds: float = VERS
+             new_address = None
+             if network is not None and rounds % NETWORK_POLL_ROUNDS == 0:
+                 new_address = next((a for a in network() if a not in hosts and _bindable(a, port)), None)
+-            if (current and current != started) or new_address:
++            redeployed_here = bool(current and current != started)
++            other_code = not redeployed_here and not new_address and changed is not None and changed()
++            if redeployed_here or new_address or other_code:
+                 if new_address:
+                     print(f"新しいアドレス {new_address} が使えるようになりました。再起動して待ち受けます。", flush=True)
++                elif other_code:
++                    print("サイト一覧（Home Page）のコードが変わりました。処理中の要求を終えてから再起動します。", flush=True)
+                 else:
+                     print(f"新しいバージョン {current} を検出しました。処理中の要求を終えてから再起動します。", flush=True)
+                 redeployed.set()
+@@ -143,14 +148,15 @@ def main() -> int:
+     also = _network_too(bind_host)
+     if also:
+         os.environ["NEWS_ALLOWED_HOSTS"] = ",".join(filter(None, [os.environ.get("NEWS_ALLOWED_HOSTS", ""), *also]))
+-    # "/" is the front page of this PC's sites; News Site is served under /news.
++    # "/" is the front page of this PC's sites (the Home Page project); News Site is served under /news.
+     app = create_app(mount=portal.NEWS_MOUNT)
+     _record_web_status(app, bind_host, port, also)
+     if os.environ.get("NEWS_SUPERVISED") == "1":
+         _keep_logon_task_current()
+     network = None if ipaddress.ip_address(bind_host).is_loopback else (lambda: _network_too(bind_host))
+     return serve_until_redeployed(portal.build(app), bind_host, port,
+-                                  supervised=os.environ.get("NEWS_SUPERVISED") == "1", also=also, network=network)
++                                  supervised=os.environ.get("NEWS_SUPERVISED") == "1", also=also, network=network,
++                                  changed=portal.code_changed)
+ 
+ 
+ def _network_too(bind_host: str) -> tuple[str, ...]:
+diff --git a/tests/test_portal.py b/tests/test_portal.py
+index 81a7d93..17b4c3d 100644
+--- a/tests/test_portal.py
++++ b/tests/test_portal.py
+@@ -1,4 +1,4 @@
+-"""The front page ("/") and News Site under /news."""
++"""News Site under /news, and the front page ("/") from the Home Page project (or News Site alone without it)."""
+ from __future__ import annotations
+ 
+ import shutil
+@@ -18,7 +18,9 @@ from newsreader.web import create_app
+ H = {"Host": "localhost"}
+ 
+ 
+-class PortalTests(unittest.TestCase):
++class Library(unittest.TestCase):
++    """One article, and News Site over it."""
++
+     def setUp(self):
+         self.tmp = Path(tempfile.mkdtemp())
+         root = self.tmp / "articles" / "BBC"
+@@ -32,24 +34,25 @@ class PortalTests(unittest.TestCase):
+         index.sync(self.tmp / "articles", db, force=True)
+         self.article = index.list_articles(db)["items"][0]["id"]
+         self.app = create_app(self.tmp / "articles", db, start_background=False, secret_key=b"k" * 32, mount="/news")
+-        self.client = Client(portal.build(self.app))
++        # no Home Page: PortalTests are about News Site; HomePageTests hand it to one
++        self.client = self.build(self.tmp / "no home page")
+ 
+     def tearDown(self):
+         shutil.rmtree(self.tmp, ignore_errors=True)
+ 
+-    def test_front_page_lists_the_sites(self):
++    def build(self, home: Path) -> Client:
++        with unittest.mock.patch.dict("os.environ", {"HOME_PAGE_DIR": str(home)}):
++            return Client(portal.build(self.app))
++
++
++class PortalTests(Library):
++
++    def test_without_the_home_page_the_front_page_is_news_site(self):
+         response = self.client.get("/", headers=H)
+-        self.assertEqual(response.status_code, 200)
+-        page = response.get_data(as_text=True)
+-        self.assertIn('<a href="/news/">NewsBridge</a>', page)
+-        # what the news site has now: its newest headlines, linked under /news
+-        self.assertIn('<ul class="now">', page)
+-        self.assertIn(f'href="/news/a/{self.article}"', page)
+-        self.assertNotIn("{{", page)
+-        self.assertIn("default-src 'none'", response.headers["Content-Security-Policy"])
+-        self.assertEqual(self.client.get("/portal.css", headers=H).status_code, 200)
+-        self.assertEqual(self.client.get("/", headers={"Host": "evil.example"}).status_code, 400)
+-        self.assertEqual(self.client.post("/", headers=H).status_code, 405)
++        self.assertEqual((response.status_code, response.headers["Location"]), (302, "/news/"))
++        self.assertEqual(self.client.get("/news/", headers=H).status_code, 200)
++        robots = self.client.get("/robots.txt", headers=H).get_data(as_text=True)
++        self.assertEqual(robots, "User-agent: *\nDisallow: /news/api/\nDisallow: /relay/\n")
+ 
+     def test_news_site_under_its_path(self):
+         page = self.client.get("/news/", headers=H).get_data(as_text=True)
+@@ -67,7 +70,7 @@ class PortalTests(unittest.TestCase):
+     def test_the_public_name_reads_and_translates_but_changes_nothing(self):
+         funnel = {"Host": "haruxera.tail1234.ts.net"}
+         self.assertEqual(self.client.post("/relay/v1/ping", headers={**funnel, "Authorization": "Bearer nbr_x"}).status_code, 401)
+-        self.assertEqual(self.client.get("/", headers=funnel).status_code, 200)
++        self.assertEqual(self.client.get("/", headers=funnel).headers["Location"], "/news/")
+         page = self.client.get("/news/", headers=funnel)
+         self.assertEqual(page.status_code, 200)
+         html = page.get_data(as_text=True)
+@@ -128,43 +131,6 @@ class PortalTests(unittest.TestCase):
+         finally:
+             translation.visitor_translations.reset(token)
+ 
+-    def test_the_infra_game_under_its_path_when_its_folder_is_here(self):
+-        game = self.tmp / "Infra Game"
+-        (game / "js").mkdir(parents=True)
+-        (game / ".git").mkdir()
+-        (game / "index.html").write_text('<!doctype html><title>CoreLab</title><script src="./js/app.js"></script>', encoding="utf-8")
+-        (game / "js" / "app.js").write_text("1;", encoding="utf-8")
+-        (game / ".git" / "config").write_text("[core]", encoding="utf-8")
+-        (game / "README.md").write_text("notes", encoding="utf-8")
+-        (self.tmp / "secret.js").write_text("2;", encoding="utf-8")
+-        with unittest.mock.patch.dict("os.environ", {"INFRA_GAME_DIR": str(game)}):
+-            client = Client(portal.build(self.app))
+-        page = client.get("/", headers=H).get_data(as_text=True)
+-        self.assertIn('<a href="/news/">NewsBridge</a>', page)
+-        self.assertIn('<a href="/infra/">CoreLab</a>', page)
+-        self.assertLess(page.index("/news/"), page.index("/infra/"))
+-        self.assertEqual(client.get("/infra", headers=H).headers["Location"], "/infra/")
+-        response = client.get("/infra/", headers=H)
+-        self.assertEqual(response.status_code, 200)
+-        self.assertIn("<title>CoreLab</title>", response.get_data(as_text=True))
+-        self.assertIn("script-src 'self'", response.headers["Content-Security-Policy"])
+-        script = client.get("/infra/js/app.js", headers=H)
+-        self.assertEqual((script.status_code, script.headers["Content-Type"]), (200, "text/javascript; charset=utf-8"))
+-        (game / ".claude").mkdir()
+-        (game / ".claude" / "settings.json").write_text("{}", encoding="utf-8")
+-        (game / "linked").symlink_to(game / ".claude", target_is_directory=True)  # as a Windows short name would
+-        for hidden in ("/infra/.git/config", "/infra/README.md", "/infra/../secret.js", "/infra/%2e%2e/secret.js",
+-                       "/infra/js", "/infra/nothing.js", "/infra/linked/settings.json", "/infra/CLAUDE~1/settings.json"):
+-            self.assertEqual(client.get(hidden, headers=H).status_code, 404, hidden)
+-        self.assertEqual(client.post("/infra/", headers=H).status_code, 405)
+-        self.assertEqual(client.get("/infra/", headers={"Host": "evil.example"}).status_code, 400)
+-        self.assertEqual(client.get("/infra/", headers={"Host": "haruxera.tail1234.ts.net"}).headers["X-Robots-Tag"], "noindex")
+-        # without the folder (another PC, a test build) the front page lists News Site only
+-        with unittest.mock.patch.dict("os.environ", {"INFRA_GAME_DIR": str(self.tmp / "missing")}):
+-            alone = Client(portal.build(self.app))
+-        self.assertNotIn("/infra/", alone.get("/", headers=H).get_data(as_text=True))
+-        self.assertEqual(alone.get("/infra/", headers=H).status_code, 308)  # an old News Site address, as before
+-
+     def test_old_addresses(self):
+         response = self.client.get(f"/a/{self.article}?tr=ja", headers=H)
+         self.assertEqual(response.status_code, 308)
+@@ -172,3 +138,95 @@ class PortalTests(unittest.TestCase):
+         # the relay keeps its address (test builds call it with POST and a fixed URL)
+         self.assertEqual(self.client.post("/relay/v1/ping", headers=H).status_code,
+                          Client(self.app).post("/relay/v1/ping", headers=H).status_code)
++
++
++#: A stand-in for the Home Page project's homepage package: it lists the apps it is handed and serves them.
++FAKE_HOME_PAGE = """
++API = 1
++import html
++
++
++class App:
++    def __init__(self, key, mount, app, name, subtitle="", description="", preview=None, disallow=(), legacy=None):
++        self.key, self.mount, self.app, self.name, self.subtitle = key, mount, app, name, subtitle
++        self.preview, self.disallow, self.legacy = preview, disallow, legacy
++
++
++def build(apps=(), allowed_hosts=None, visitor_hosts=None, config=None):
++    def portal(environ, start_response):
++        path, host = environ["PATH_INFO"], environ.get("HTTP_HOST", "")
++        for item in apps:
++            if path.startswith(item.mount + "/"):
++                environ = dict(environ, SCRIPT_NAME=item.mount, PATH_INFO=path[len(item.mount):])
++                return item.app(environ, start_response)
++        if not allowed_hosts(host):
++            start_response("400 Bad Request", [])
++            return [b""]
++        rows = "".join(f'<a href="{item.mount}/">{html.escape(item.name)}</a> {item.subtitle} {item.disallow} {item.legacy} '
++                       + "".join(f'<a href="{item.mount}{p}">{html.escape(t)}</a>' for t, p in item.preview()["items"])
++                       for item in apps)
++        body = f"{rows} visitor={visitor_hosts(host)} scheme={environ['wsgi.url_scheme']}".encode()
++        start_response("200 OK", [("Content-Type", "text/html; charset=utf-8")])
++        return [body]
++    return portal
++"""
++
++
++class HomePageTests(Library):
++    """What News Site hands the Home Page, and how it does without one that works."""
++
++    def make_home_page(self, code: str = FAKE_HOME_PAGE) -> Path:
++        home = self.tmp / "Home Page"
++        (home / "homepage").mkdir(parents=True, exist_ok=True)
++        (home / "homepage" / "__init__.py").write_text(code, encoding="utf-8")
++        return home
++
++    def test_news_site_is_handed_to_the_home_page_with_what_it_has_now(self):
++        client = self.build(self.make_home_page())
++        page = client.get("/", headers=H).get_data(as_text=True)
++        self.assertIn('<a href="/news/">NewsBridge</a> 翻訳して読み比べるニュース', page)
++        self.assertIn("('/api/',) ('/relay/',)", page)
++        self.assertIn(f'href="/news/a/{self.article}"', page)  # the newest headlines, under /news
++        self.assertIn("visitor=False scheme=http", page)
++        self.assertEqual(client.get("/", headers={"Host": "evil.example"}).status_code, 400)
++        funnel = client.get("/", headers={"Host": "haruxera.tail1234.ts.net"})
++        self.assertIn("visitor=True scheme=https", funnel.get_data(as_text=True))
++        self.assertEqual(funnel.headers["X-Robots-Tag"], "noindex")
++        self.assertEqual(client.get(f"/news/a/{self.article}", headers=H).status_code, 200)
++
++    def test_a_change_to_the_home_page_code_is_noticed(self):
++        home = self.make_home_page()
++        self.build(home)
++        with unittest.mock.patch.dict("os.environ", {"HOME_PAGE_DIR": str(home)}):
++            self.assertFalse(portal.code_changed())
++            (home / "homepage" / "__init__.py").write_text(FAKE_HOME_PAGE + "\n# edited\n", encoding="utf-8")
++            self.assertTrue(portal.code_changed())
++        self.build(home)
++        with unittest.mock.patch.dict("os.environ", {"HOME_PAGE_DIR": str(home)}):
++            self.assertFalse(portal.code_changed())
++        with unittest.mock.patch.dict("os.environ", {"HOME_PAGE_DIR": str(self.tmp / "elsewhere")}):
++            self.assertTrue(portal.code_changed())
++
++    def test_a_broken_or_different_home_page_leaves_news_site_alone(self):
++        for code in ("API = 1\ndef build(:\n", "API = 2\nclass App: pass\ndef build(*a, **k): pass\n"):
++            client = self.build(self.make_home_page(code))
++            response = client.get("/", headers=H)
++            self.assertEqual((response.status_code, response.headers["Location"]), (302, "/news/"), code)
++            self.assertEqual(client.get(f"/news/a/{self.article}", headers=H).status_code, 200)
++
++
++@unittest.skipUnless((portal.home_page_dir() / "homepage" / "__init__.py").is_file(), "no Home Page project on this PC")
++class RealHomePageTests(Library):
++    """With this PC's own Home Page folder: the front page lists News Site with its newest headlines."""
++
++    def test_front_page_lists_news_site(self):
++        client = self.build(portal.home_page_dir())
++        response = client.get("/", headers=H)
++        self.assertEqual(response.status_code, 200)
++        page = response.get_data(as_text=True)
++        self.assertIn('<a href="/news/">NewsBridge</a>', page)
++        self.assertIn(f'href="/news/a/{self.article}"', page)
++        self.assertNotIn("{{", page)
++        self.assertIn("default-src 'none'", response.headers["Content-Security-Policy"])
++        self.assertEqual(client.get("/", headers={"Host": "evil.example"}).status_code, 400)
++        self.assertEqual(client.get(f"/a/{self.article}", headers=H).headers["Location"], f"/news/a/{self.article}")
+-- 
+2.53.0.windows.2
+

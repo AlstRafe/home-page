@@ -1,0 +1,45 @@
+# サイト一覧（このPCの "/"）に並べるサイト。
+# 書き換えて一覧ページを再読み込みすると反映されます（サーバーの再起動は不要）。
+# 書き間違いがあると、このPCから開いたときだけページ下の「持ち主向け」欄に理由が出ます。
+
+title = "サイト一覧"
+lead = "個人のパソコンから配信している、小さなサイトの入口です。気になるものを選んで開いてください。"
+points = ["登録不要", "無料", "スマホでも使えます"]
+about = "どのサイトも個人が試験的に公開しているもので、内容や公開は予告なく変わることがあります。"
+
+# ── サイトの足し方 ─────────────────────────────────────────────
+# 静的ファイル（index.html のあるフォルダ）なら、次の形の [[site]] を1つ足すだけ:
+#
+# [[site]]
+# mount = "/memo"                  # アドレス（/ と英小文字・数字・ハイフン）
+# folder = "../Memo"               # このファイルからの相対パスか絶対パス
+# name = "Memo"                    # 表示名
+# subtitle = "ひとことで何のサイトか"
+# description = "初めての人に向けた 1〜2 文の説明"
+# icon = "book"                    # homepage/icons のファイル名（news terminal globe book game chart photo tool music）
+# accent = "green"                 # red blue teal green amber purple gray
+# tags = ["インストール不要"]
+# open = "Memo を開く"             # ボタンの文言（省略すると「<name> を開く」）
+# public = false                   # テスト公開の名前では隠す（このPCとLANからだけ見える）。省略すると公開
+# home_link = "own"                # 自前の「サイト一覧へ戻る」リンクがあるとき。省略するとポータルが左下に付ける
+#
+# 並び順はこのファイルの順。フォルダや index.html が見つからないサイトは表示しません。
+# ────────────────────────────────────────────────────────────
+
+[[site]]
+app = "news"   # News Site のサーバーが用意するサイト（/news）。名前と副題は News Site 側の設定を使う
+description = "BBC・中央社・聯合ニュースと、技術系の InfoQ・iThome などを毎時取得。原文と訳を並べ、同じニュースを各社で読み比べられます。"
+icon = "news"
+accent = "red"
+tags = ["毎時更新", "英・中・韓 → 日本語", "各社の読み比べ"]
+
+[[site]]
+mount = "/infra"
+folder = "../Infra Game"
+name = "CoreLab"
+subtitle = "インフラ運用トレーニングゲーム"
+description = "Kubernetes・Docker・Harbor・OpenShift・AWS のよくある障害を、ブラウザの中のターミナルで解決しながら学べます。操作はすべて架空データのシミュレーションです。"
+icon = "terminal"
+accent = "teal"
+tags = ["インストール不要", "Linux 基礎から 19 ミッション", "架空データで安全"]
+home_link = "own"
