@@ -7,6 +7,12 @@ lead = "個人のパソコンから配信している、小さなサイトの入
 points = ["登録不要", "無料", "スマホでも使えます"]
 about = "どのサイトも個人が試験的に公開しているもので、内容や公開は予告なく変わることがあります。"
 
+# サーバー（launcher.py が起動）。ここと Python サイトの指定を変えると、サーバーが自動で再起動します。
+[server]
+port = 5000          # テスト公開（Tailscale Funnel）はこの番号の 127.0.0.1 へ転送している
+listen = "network"   # "network": Tailscale・LAN・このPC / "local": このPCだけ
+# hosts = ["mypc.local"]   # ほかに受け付けるホスト名（このPCの名前・アドレス・*.ts.net は自動）
+
 # ── サイトの足し方 ─────────────────────────────────────────────
 # 静的ファイル（index.html のあるフォルダ）なら、次の形の [[site]] を1つ足すだけ:
 #
@@ -23,11 +29,17 @@ about = "どのサイトも個人が試験的に公開しているもので、�
 # public = false                   # テスト公開の名前では隠す（このPCとLANからだけ見える）。省略すると公開
 # home_link = "own"                # 自前の「サイト一覧へ戻る」リンクがあるとき。省略するとポータルが左下に付ける
 #
+# Python の Web アプリ（WSGI）は folder の代わりに python と entry を書く（サーバーの起動時に読み込む）:
+# python = "../MyApp"              # sys.path に足すフォルダ（requirements.txt があれば launcher が入れる）
+# entry = "myapp.hosting:site"     # site(mount=..., host={...}) が {"app": WSGIアプリ, ...} を返す
+#
 # 並び順はこのファイルの順。フォルダや index.html が見つからないサイトは表示しません。
 # ────────────────────────────────────────────────────────────
 
 [[site]]
-app = "news"   # News Site のサーバーが用意するサイト（/news）。名前と副題は News Site 側の設定を使う
+mount = "/news"
+python = "../News Site/work/app"
+entry = "newsreader.hosting:site"   # 名前と副題は News Site 側が返す
 description = "BBC・中央社・聯合ニュースと、技術系の InfoQ・iThome などを毎時取得。原文と訳を並べ、同じニュースを各社で読み比べられます。"
 icon = "news"
 accent = "red"

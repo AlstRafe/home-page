@@ -4,9 +4,9 @@ What the page lists comes from ``sites.toml`` in the Home Page folder. Edits to 
 page's HTML, CSS and icons, show on the next request, without restarting the server.
 
 A site is either a folder of static files (``folder = ...`` in sites.toml, served by ``StaticFiles``)
-or a WSGI app the server provides by name (``app = "news"``). News Site's server builds the whole
-thing with ``build(apps=[App(...)], ...)`` and serves it at its address; ``python -m homepage``
-serves the folder sites alone, for trying out a change.
+or a Python web app (``python = ...``, ``entry = ...``) that the server (homepage.server) loads at
+its start and hands over as an ``App``. ``python -m homepage`` serves the folder sites alone (and,
+with ``--demo``, a stand-in News Site), for trying out a change.
 """
 from __future__ import annotations
 
@@ -20,8 +20,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote
 
-#: The contract with the server that loads this package (News Site's newsreader/portal): ``build`` and ``App``.
-API = 1
 PACKAGE = Path(__file__).resolve().parent
 HOME = PACKAGE.parent
 CONFIG = HOME / "sites.toml"
@@ -43,7 +41,8 @@ class App:
     over the items, "新着" when left out; note: how fresh they are). ``disallow``: paths under the
     mount crawlers should not call. ``legacy``: this site also answers the addresses it had before
     the portal: unknown GET paths are redirected under its mount, paths starting with one of these
-    prefixes (and requests that are not GET/HEAD) go to it unchanged."""
+    prefixes (and requests that are not GET/HEAD) go to it unchanged. ``version()``: what the
+    site's code is now; the server restarts into new code when it changes."""
     key: str
     mount: str
     app: object
@@ -53,6 +52,7 @@ class App:
     preview: object = None
     disallow: tuple = ()
     legacy: tuple | None = None
+    version: object = None
 
 
 @dataclass
@@ -86,8 +86,10 @@ class Site:
 class Portal:
     """WSGI: "/" is the index, ``/<site>/...`` goes to that site."""
 
-    def __init__(self, apps=(), allowed_hosts=None, visitor_hosts=None, config: Path = CONFIG):
+    def __init__(self, apps=(), allowed_hosts=None, visitor_hosts=None, config: Path = CONFIG, notes=()):
         self.apps = {item.key: item for item in apps}
+        #: What the server could not do at its start (a Python site that failed to load), for the owner.
+        self.notes = list(notes)
         #: callable(host) -> bool for the portal's own pages and the folder sites, or None for any.
         self.allowed_hosts = allowed_hosts
         #: callable(host) -> bool: names the public reaches (テスト公開). Visitors see neither the
@@ -119,12 +121,13 @@ class Portal:
             try:
                 data = tomllib.loads(self.config.read_text(encoding="utf-8")) if stamp else {}
             except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
-                self.problems = [f"sites.toml を読めませんでした（{exc}）。直すまでは前の内容で表示しています。"]
+                self.problems = [*self.notes, f"sites.toml を読めませんでした（{exc}）。直すまでは前の内容で表示しています。"]
                 if first:
                     self.settings, self.sites = {}, self._sites({})[0]
                 return
             self.settings = data
             self.sites, self.problems = self._sites(data)
+            self.problems[:0] = self.notes
             if not stamp:
                 self.problems.insert(0, f"{self.config} がありません。サーバーが用意するサイトだけを表示しています。")
 
@@ -169,9 +172,9 @@ class Portal:
             raise ValueError("tags は文字列の並び（[\"…\", \"…\"]）です。")
         common = dict(icon=text["icon"], accent=accent, tags=tuple(tags), open_label=text["open"],
                       listed=_flag(entry, "listed"), public=_flag(entry, "public"))
-        if "app" in entry:
-            item = self.apps.get(_text(entry, "app"))
-            if item is None:  # this server does not provide it (Home Page run on its own)
+        if "app" in entry or "python" in entry:
+            item = self.apps.get(_text(entry, "app") or _text(entry, "mount"))
+            if item is None:  # not loaded (the server's note says why) or not provided (python -m homepage)
                 return None
             return Site(item.mount, text["name"] or item.name, item.app, text["subtitle"] or item.subtitle,
                         text["description"] or item.description, preview=item.preview, **common)
@@ -387,9 +390,9 @@ class StaticFiles:
         return value
 
 
-def build(apps=(), allowed_hosts=None, visitor_hosts=None, config: Path | None = None) -> Portal:
+def build(apps=(), allowed_hosts=None, visitor_hosts=None, config: Path | None = None, notes=()) -> Portal:
     """The portal for a server: ``apps`` are the sites it provides (``App``), the rest comes from sites.toml."""
-    return Portal(apps, allowed_hosts=allowed_hosts, visitor_hosts=visitor_hosts, config=config or CONFIG)
+    return Portal(apps, allowed_hosts=allowed_hosts, visitor_hosts=visitor_hosts, config=config or CONFIG, notes=notes)
 
 
 # -- helpers --------------------------------------------------------------------------------------

@@ -24,7 +24,7 @@ def main() -> None:
         sample = {"title": "各社が伝えた話題", "note": "取得 12分前", "items": [("台風が沖縄に接近、交通に影響", "/stories/a"),
                                                 ("半導体輸出、前年比で増加", "/stories/b"),
                                                 ("Kubernetes 新版、スケジューラを改良", "/stories/c")]}
-        apps.append(App("news", "/news", _stand_in, "NewsBridge", "翻訳して読み比べるニュース",
+        apps.append(App("/news", "/news", _stand_in, "NewsBridge", "翻訳して読み比べるニュース",
                         preview=lambda: sample, disallow=("/api/",), legacy=("/relay/",)))
     portal = build(apps)
     with make_server("127.0.0.1", args.port, portal) as server:

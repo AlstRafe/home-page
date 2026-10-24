@@ -232,7 +232,8 @@ name = "Gone"
         self.assertNotIn('class="now"', page)
 
     def test_this_folders_own_sites_toml_reads_cleanly(self):
-        portal = homepage.build([NEWS])
+        from dataclasses import replace
+        portal = homepage.build([replace(NEWS, key="/news")])  # as the server loads the Python site
         problems = [p for p in portal.problems if "index.html がありません" not in p]
         self.assertEqual(problems, [])
         self.assertEqual(portal.sites[0].mount, "/news")
