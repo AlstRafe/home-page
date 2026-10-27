@@ -1,0 +1,16 @@
+# News Site: one collection cycle (what the PC's hourly scheduled task ran).
+[Unit]
+Description=News Site collection
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=sites
+Group=sites
+WorkingDirectory=/srv/sites/News Site/work/app
+Environment=PYTHONUNBUFFERED=1 PYTHONIOENCODING=utf-8
+Environment=PYTHON_KEYRING_BACKEND=keyrings.alt.file.PlaintextKeyring
+ExecStart=/srv/sites/venv/bin/python collector.py --once
+Nice=10
+TimeoutStartSec=50min

@@ -1,0 +1,10 @@
+# Pull the three GitHub repositories and put what changed into effect (deploy/update.sh).
+[Unit]
+Description=Update the sites from GitHub
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash "/srv/sites/Home Page/deploy/update.sh"
+TimeoutStartSec=15min

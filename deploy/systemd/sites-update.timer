@@ -1,0 +1,11 @@
+[Unit]
+Description=Update the sites from GitHub every minute
+
+[Timer]
+OnBootSec=1min
+OnActiveSec=1min
+OnUnitInactiveSec=1min
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

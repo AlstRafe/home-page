@@ -1,0 +1,16 @@
+# Keeps the Always Free VM from counting as idle (deploy/keepalive.py), at the lowest priority.
+[Unit]
+Description=Keep the VM from being reclaimed as idle
+
+[Service]
+User=sites
+Group=sites
+ExecStart=/srv/sites/venv/bin/python "/srv/sites/Home Page/deploy/keepalive.py"
+Nice=19
+CPUSchedulingPolicy=idle
+IOSchedulingClass=idle
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

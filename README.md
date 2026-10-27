@@ -1,7 +1,9 @@
-# Home Page — このPCのサイトとサーバー
+# Home Page — サイト一覧とサーバー
 
-このパソコンから配信しているサイト（News Site の NewsBridge、Infra Game の CoreLab など）の入口ページと、それらをまとめて配信するサーバー。
-`/` がサイト一覧、各サイトは `/news`・`/infra` のように自分のパスの下で動く。ポート 5000 で Tailscale・LAN・このPC（Funnel のテスト公開はここ経由）から受け付ける。
+サイト（News Site の NewsBridge、Infra Game の CoreLab など）の入口ページと、それらをまとめて配信するサーバー。
+`/` がサイト一覧、各サイトは `/news`・`/infra` のように自分のパスの下で動く。ポート 5000 で Tailscale・LAN・自分自身（Funnel の公開はここ経由）から受け付ける。
+
+**配信はクラウドの VM（Oracle Cloud Always Free）で、GitHub に push すると 1 分以内に反映される。** 準備と移し方は [deploy/README.md](deploy/README.md)。以下の「起動と切り替え」は PC で動かすときの話。
 
 ## 構成
 
@@ -15,6 +17,7 @@ homepage/i18n.py      言語（日本語・한국어・English (UK)・中文（�
 homepage/page.html    一覧ページのひな形 / portal.css 見た目 / icons/*.svg アイコン / favicon.svg
 homepage/__main__.py  python -m homepage --demo: 一覧の見た目だけを試す小さなサーバー
 tests/                python -m unittest discover -s tests
+deploy/               クラウドの VM で配信する: 準備（setup.sh）、GitHub からの自動反映（update.sh）、PC からの移行（migrate.py）
 patches/              News Site へ渡したパッチの控え
 instance/             server.log など（git 管理外）
 ```
@@ -83,11 +86,9 @@ python -m homepage --demo
 - 旧アドレス（`/a/123` など）は `/news/…` へ 308 転送、`/relay/…` はそのまま News Site が答える
 - `News Site\work\app` には直接コミットしない。News Site 側の変更はパッチにして News Site プロジェクトに取り込んでもらう
 
-## 取り込み待ち
+## パッチ
 
-- `patches/news-site-i18n-20261027.patch`（News Site 用、6e3e1c4 の上に `git am`）: News Site の全画面を日本語・韓国語・英語（英国）・台湾華語に。ヘッダーの言語メニューと `?lang=` で選び、このサーバーと同じ `lang` クッキーを使う。訳は `newsreader/locale/<言語>.json`。取り込むまでは、言語を切り替えても /news だけ日本語のまま。
-
-取り込み済みのパッチの控えも `patches/` に置いている。
+News Site へ渡したパッチの控えは `patches/` にある（どれも取り込み済み。最後の `news-site-i18n-20261027.patch` は News Site の ba2225f）。
 
 ## 今後の候補
 

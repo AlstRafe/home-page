@@ -1,0 +1,10 @@
+# A copy of News Site's databases and settings every day (deploy/backup.py; the last 14 are kept).
+[Unit]
+Description=Back up News Site's data
+
+[Service]
+Type=oneshot
+User=sites
+Group=sites
+ExecStart=/srv/sites/venv/bin/python "/srv/sites/Home Page/deploy/backup.py" "/srv/sites/News Site/work/app/instance" /srv/sites/backup
+Nice=10

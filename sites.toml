@@ -3,26 +3,26 @@
 # 書き間違いがあると、このPCから開いたときだけページ下の「持ち主向け」欄に理由が出ます。
 
 title = "サイト一覧"
-lead = "個人のパソコンから配信している、小さなサイトの入口です。気になるものを選んで開いてください。"
+lead = "個人で運営している、小さなサイトの入口です。気になるものを選んで開いてください。"
 points = ["登録不要", "無料", "スマホでも使えます"]
 about = "どのサイトも個人が試験的に公開しているもので、内容や公開は予告なく変わることがあります。"
 
 # ほかの言語（訪問者が右上のメニューで選ぶ。ない項目は日本語のまま）。各サイトの [site.ko] なども同じ形。
 [ko]
 title = "사이트 목록"
-lead = "개인 PC에서 운영하는 작은 사이트들의 입구입니다. 관심 있는 사이트를 골라 열어 보세요."
+lead = "개인이 운영하는 작은 사이트들의 입구입니다. 관심 있는 사이트를 골라 열어 보세요."
 points = ["회원가입 불필요", "무료", "스마트폰에서도 사용 가능"]
 about = "모든 사이트는 개인이 시험적으로 공개하는 것으로, 내용과 공개 여부는 예고 없이 바뀔 수 있습니다."
 
 [en-GB]
 title = "All sites"
-lead = "The way in to a few small sites served from a personal computer. Pick one that interests you and open it."
+lead = "The way in to a few small sites run by one person. Pick one that interests you and open it."
 points = ["No sign-up", "Free", "Works on phones"]
 about = "Every site here is a personal experiment; content and availability may change without notice."
 
 [zh-TW]
 title = "網站列表"
-lead = "這裡是從個人電腦提供的幾個小網站的入口。挑一個感興趣的打開看看吧。"
+lead = "這裡是個人經營的幾個小網站的入口。挑一個感興趣的打開看看吧。"
 points = ["免註冊", "免費", "手機也能用"]
 about = "每個網站都是個人試驗性公開的，內容與公開狀態可能隨時變更，恕不另行通知。"
 

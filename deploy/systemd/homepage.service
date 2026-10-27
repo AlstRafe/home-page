@@ -1,0 +1,20 @@
+# The sites' server (Home Page): /, /news, /infra on port 5000. Exit 75 means "start me again with
+# the new code" (homepage/server.py), so it is always started again.
+[Unit]
+Description=Home Page server (the sites)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+User=sites
+Group=sites
+WorkingDirectory=/srv/sites/Home Page
+Environment=HOME_SUPERVISED=1 PYTHONUNBUFFERED=1 PYTHONIOENCODING=utf-8
+Environment=PYTHON_KEYRING_BACKEND=keyrings.alt.file.PlaintextKeyring
+ExecStart=/srv/sites/venv/bin/python -m homepage.server
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
