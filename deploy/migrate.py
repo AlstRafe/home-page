@@ -83,7 +83,9 @@ def check_ssh(server: Server) -> None:
 
 
 def set_up(server: Server) -> None:
-    server.send(HOME / "deploy" / "setup.sh", "sites-setup.sh")
+    script = (HOME / "deploy" / "setup.sh").read_bytes().replace(b"\r\n", b"\n")  # even from a CRLF checkout
+    if subprocess.run(server.command("umask 077 && cat > sites-setup.sh"), input=script).returncode != 0:
+        raise Stop("setup.sh をサーバーへ送れませんでした。")
     while True:
         code = server.run("sudo bash sites-setup.sh", tty=True).returncode
         if code == 0:

@@ -202,7 +202,7 @@ import_data() {
 wait_until_answering() {
   local _
   for _ in $(seq 60); do
-    if curl -fsS -o /dev/null "http://127.0.0.1:$PORT/news/"; then
+    if curl -fs -o /dev/null "http://127.0.0.1:$PORT/news/"; then
       echo "サーバーが答えています: http://127.0.0.1:$PORT/"
       return 0
     fi
