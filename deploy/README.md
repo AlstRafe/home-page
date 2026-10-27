@@ -46,7 +46,7 @@ py -3 deploy\migrate.py
 ## そのあと
 
 - **変更は GitHub に push するだけ**（1 分以内に反映）。VM の中のファイルは直接書き換えない（次の反映で GitHub の内容に戻る）
-- VM に入る: `ssh ubuntu@<名前>`（移行後は PC の元の名前）
+- VM に入る: `ssh ubuntu@<名前>.<tailnet>.ts.net`（公開アドレスのホスト名。移行後は PC の元の名前なので、短い名前だと PC 自身を指してしまう）
 - 記録: `journalctl -u homepage -u sites-update -u news-collector -n 50`
 - 持ち主向けのページ（一覧の「持ち主向け」欄、News Site の設定）: tailnet の端末から `http://<名前>:5000/`
 - 再起動: `sudo systemctl restart homepage`
@@ -56,7 +56,7 @@ py -3 deploy\migrate.py
 ## うまくいかないとき
 
 - **ssh で入れない**: 古い tailnet だと SSH の許可がない。管理画面の Access controls の `"ssh"` に `{"action": "check", "src": ["autogroup:member"], "dst": ["autogroup:self"], "users": ["autogroup:nonroot", "root"]}` を足す
-- **Tailscale のない端末から開けない / Funnel が有効にならない**: PC で `ssh -t ubuntu@<名前> "sudo bash '/srv/sites/Home Page/deploy/setup.sh' --funnel"`。URL が出たら開いて Funnel を許可する。`公開アドレス:` と出れば外から開ける（反映に数分かかることがある）
+- **Tailscale のない端末から開けない / Funnel が有効にならない**: PC で `ssh -t ubuntu@<名前>.<tailnet>.ts.net "sudo bash '/srv/sites/Home Page/deploy/setup.sh' --funnel"`。URL が出たら開いて Funnel を許可する。`公開アドレス:` と出れば外から開ける（反映に数分かかることがある）
 - **アドレスの引き継ぎで PC の名前を変えられなかった**: 管理画面で PC の名前を `<名前>-pc` に変えてから `py -3 deploy\migrate.py --address-only`
 - **PC で配信に戻す**: VM の名前を変える（`sudo tailscale set --hostname=sites`）→ PC の名前を元に戻す → PC で `py -3 launcher.py --take-over` と `tailscale funnel --bg 5000`、News Site の収集タスクを有効に戻す（`schtasks /Change /TN <タスク名> /ENABLE`）
 
