@@ -186,17 +186,27 @@ public_name() {
     'import json, sys; print((json.load(sys.stdin).get("Self") or {}).get("DNSName", "").rstrip("."))' 2>/dev/null || true
 }
 
+# Whether this machine is open to the internet through Funnel, not only to the tailnet.
+funnel_on() {
+  tailscale serve status --json 2>/dev/null | "$VENV/bin/python" -c \
+    'import json, sys; sys.exit(0 if any((json.load(sys.stdin).get("AllowFunnel") or {}).values()) else 1)' 2>/dev/null
+}
+
 publish() {
   say "公開（Tailscale Funnel）"
   if ! tailscale status >/dev/null 2>&1; then
-    echo "Tailscale にまだ参加していません。sudo tailscale up --ssh を実行してから --funnel でもう一度どうぞ。"
-    return 0
+    echo "Tailscale にまだ参加していません。sudo tailscale up --ssh を実行してから --funnel でもう一度どうぞ。" >&2
+    return 1
   fi
   tailscale funnel reset >/dev/null 2>&1 || true  # its settings name the machine: start over after a rename
-  if timeout 300 tailscale funnel --bg "$PORT"; then
+  timeout 300 tailscale funnel --bg "$PORT" || true
+  if funnel_on; then
     echo "公開アドレス: https://$(public_name)/"
   else
-    echo "Funnel を有効にできませんでした。表示された案内（Tailscale 管理画面で Funnel を許可）のあと --funnel でもう一度どうぞ。"
+    echo "Funnel を有効にできませんでした（今は Tailscale の中からしか開けません）。表示された URL か、" \
+      "Tailscale 管理画面の Access controls で Funnel を許可してから、" \
+      "sudo bash \"$ROOT/Home Page/deploy/setup.sh\" --funnel でもう一度どうぞ。" >&2
+    return 1
   fi
 }
 

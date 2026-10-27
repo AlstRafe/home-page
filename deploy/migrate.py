@@ -303,7 +303,7 @@ def wait_for(address: str) -> None:
         try:
             with urllib.request.urlopen(address, timeout=30) as answer:
                 if answer.status == 200:
-                    print(f"公開アドレスが答えています: {address}")
+                    print(f"公開アドレスが答えています: {address}（Funnel で外にも公開済み。スマホのモバイル回線でも確かめてください）")
                     return
         except OSError:
             pass
