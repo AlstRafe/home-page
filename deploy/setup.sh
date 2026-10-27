@@ -57,6 +57,21 @@ install_packages() {
   fi
 }
 
+# A small VM (the 1 GB VM.Standard.E2.1.Micro) gets 2 GB of swap: installing the packages, the server
+# and an hourly collection at once would not fit in its memory otherwise.
+add_swap() {
+  local memory
+  memory="$(awk '/^MemTotal:/ {print $2}' /proc/meminfo)"
+  if [ "${memory:-0}" -lt 3000000 ] && [ -z "$(swapon --show --noheadings)" ]; then
+    say "スワップ（メモリが少ないので 2 GB）"
+    [ -f /swapfile ] || { fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none; }
+    chmod 600 /swapfile
+    mkswap -q /swapfile
+    swapon /swapfile
+    grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  fi
+}
+
 make_account() {
   if ! id "$ACCOUNT" >/dev/null 2>&1; then
     useradd --system --home-dir "$ROOT" --shell /usr/sbin/nologin "$ACCOUNT"
@@ -223,6 +238,7 @@ main() {
     *) echo "使い方: sudo bash setup.sh [--import FILE | --units | --funnel | --sync]" >&2; exit 2 ;;
   esac
   install_packages
+  add_swap
   make_account
   make_keys
   clone_repos

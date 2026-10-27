@@ -26,7 +26,7 @@ PC を切っても `/`・`/news`・`/infra` が動き続けるように、Oracle
    - SSH キー: **キーなし**でよい（入るのは Tailscale SSH）
    - ブート・ボリューム: 既定のまま（約 50 GB）
    - 拡張オプション → 管理 → 初期化スクリプト → **cloud-init スクリプトの貼付け**: [`cloud-init.sh`](cloud-init.sh) の中身を貼り、`TS_AUTHKEY` の行を 1. のキーに書き換える
-3. **作成**。「容量不足（Out of capacity）」と出たら、時間をおくか別の可用性ドメインで作り直す。どうしても空かなければ VM.Standard.E2.1.Micro（1 GB、これも無料）でも動く
+3. **作成**。「容量不足（Out of capacity）」と出たら、OCPU 1・メモリ 6 GB に下げるか、時間をおいて作り直す（東京・大阪は可用性ドメインが 1 つだけ）。どうしても空かなければ Specialty and previous generation の VM.Standard.E2.1.Micro（AMD・1 GB、これも無料）でも動く（setup.sh が 2 GB のスワップを足す）
 4. 数分で Tailscale の管理画面（Machines）に `sites` が出る。その行の「…」→ **Disable key expiry**（しないと 180 日で tailnet から外れ、公開も止まる）
 
 ### 3. PC から移す
