@@ -1,26 +1,26 @@
 <!doctype html>
-<html lang="ja">
+<html lang="{{ lang }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <meta name="format-detection" content="telephone=no">
-<meta name="theme-color" content="#f5f3ee" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f6f4ef" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#161513" media="(prefers-color-scheme: dark)">
 <title>{{ title }}</title>
 <meta name="description" content="{{ description }}">
 <meta property="og:type" content="website">
 <meta property="og:title" content="{{ title }}">
 <meta property="og:description" content="{{ description }}">
 <meta property="og:url" content="{{ url }}">
-<meta property="og:locale" content="ja_JP">
+<meta property="og:locale" content="{{ locale }}">
 <meta name="twitter:card" content="summary">
 <link rel="icon" href="{{ icon }}" type="image/svg+xml">
 <link rel="stylesheet" href="{{ css }}">
 </head>
 <body>
 <header>
-<p class="date">{{ date }}</p>
+<div class="bar"><p class="date">{{ date }}</p>{{ menu }}</div>
 <h1>{{ title }}</h1>
 {{ lead }}
 {{ points }}
@@ -32,7 +32,7 @@
 </main>
 <footer>
 {{ about }}
-<p class="count">サイト {{ count }} 件</p>
+<p class="count">{{ count }}</p>
 {{ owner }}
 </footer>
 </body>

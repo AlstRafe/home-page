@@ -280,6 +280,82 @@ name = "Gone"
         self.assertIn('<a href="/news/">NewsBridge</a>', page)
         self.assertNotIn('class="now"', page)
 
+    def test_one_language_for_every_site_chosen_by_the_visitor(self):
+        status, headers, _ = call(self.portal, "/news/a/7?tr=ja&lang=ko")
+        self.assertEqual((status, headers["Location"]), (302, "/news/a/7?tr=ja"))
+        self.assertIn("lang=ko; Path=/;", headers["Set-Cookie"])
+        self.assertEqual(call(self.portal, "/?lang=en-GB")[1]["Location"], "/")
+        self.assertEqual(call(self.portal, "/infra/?lang=zh-TW")[1]["Location"], "/infra/")
+        self.assertEqual(call(self.portal, "/?lang=fr")[0], 200)  # not one of ours: no choice
+        self.assertIn("Secure", call(self.portal, "/?lang=ko", **{"wsgi.url_scheme": "https"})[1]["Set-Cookie"])
+        self.write(self.config.read_text(encoding="utf-8").replace('home_link = "own"', 'home_link = "own"\n\n[site.ko]\nsubtitle = "인프라 운영 트레이닝 게임"\ntags = ["설치 불필요"]')
+                   + '\n[ko]\ntitle = "사이트 목록"\npoints = ["무료"]\n')
+        status, headers, page = call(self.portal, "/", HTTP_COOKIE="lang=ko")
+        self.assertIn('<html lang="ko">', page)
+        self.assertIn("<h1>사이트 목록</h1>", page)
+        self.assertIn("<li>무료</li>", page)
+        self.assertIn("小さなサイトの入口です。", page)  # a text without a translation stays Japanese
+        self.assertIn('<p class="sub">인프라 운영 트레이닝 게임</p>', page)
+        self.assertIn("<li>설치 불필요</li>", page)
+        self.assertIn('CoreLab 열기', page)
+        self.assertIn("사이트 2개", page)
+        self.assertIn('<a href="?lang=ko" lang="ko" hreflang="ko" aria-current="true">한국어</a>', page)
+        self.assertIn('<a href="?lang=en-GB" lang="en-GB" hreflang="en-GB">English (UK)</a>', page)
+        self.assertIn("Cookie", headers["Vary"])
+        self.assertIn('<p class="sub">翻訳して読み比べるニュース</p>', page)  # no [site.ko] for News: its own
+        english = call(self.portal, "/", HTTP_ACCEPT_LANGUAGE="en-US,en;q=0.9,ja;q=0.5")[2]
+        self.assertIn('<html lang="en-GB">', english)
+        self.assertIn("Open CoreLab", english)
+        self.assertIn("2 sites", english)
+        self.assertIn('<html lang="ja">', call(self.portal, "/", HTTP_COOKIE="lang=ja", HTTP_ACCEPT_LANGUAGE="ko")[2])
+        self.write(self.config.read_text(encoding="utf-8") + '\n[en-GB]\npoints = "Free"\n')
+        self.assertIn("[en-GB] の points は文字列の並び", call(self.portal, "/")[2])
+
+    def test_the_browsers_languages_decide_until_the_visitor_chooses(self):
+        from homepage import i18n
+        cases = {"": "ja", "ja,en;q=0.8": "ja", "ko-KR,ko;q=0.9": "ko", "zh-TW,zh;q=0.9": "zh-TW", "zh-CN": "zh-TW",
+                 "en-US": "en-GB", "fr-FR,fr;q=0.9": "en-GB", "fr,ko;q=0.5,ja;q=0.8": "ja", "en;q=0,ko": "ko"}
+        for header, lang in cases.items():
+            self.assertEqual(i18n.from_browser(header), lang, header)
+        self.assertEqual(i18n.chosen({"HTTP_COOKIE": "lang=zh-TW; other=1", "HTTP_ACCEPT_LANGUAGE": "ko"}), "zh-TW")
+        self.assertEqual(i18n.chosen({"HTTP_COOKIE": "lang=xx", "HTTP_ACCEPT_LANGUAGE": "ko"}), "ko")
+
+    def test_previews_and_the_way_back_in_the_visitors_language(self):
+        seen = []
+        news_app = homepage.App("news", "/news", news, "NewsBridge",
+                                preview=lambda lang: seen.append(lang) or {"note": f"note-{lang}", "items": [("x", "/a/1")]})
+        portal = homepage.build([news_app], config=self.config)
+        self.assertIn("note-zh-TW", call(portal, "/", HTTP_COOKIE="lang=zh-TW")[2])
+        self.assertEqual(seen, ["zh-TW"])
+        (self.game / "portal.json").write_text(
+            '{"title": {"ja": "すぐ遊べるミッション", "en-GB": "Missions to play now"}, '
+            '"items": [[{"ja": "初日の当番", "ko": "첫날 당번"}, "/#/play/basics-01"]]}', encoding="utf-8")
+        self.write(self.config.read_text(encoding="utf-8").replace('home_link = "own"', 'home_link = "own"\npreview = "portal.json"'))
+        self.assertIn('<p class="now-head">Missions to play now<span>Updated ', call(self.portal, "/", HTTP_COOKIE="lang=en-GB")[2])
+        korean = call(self.portal, "/", HTTP_COOKIE="lang=ko")[2]
+        self.assertIn('>첫날 당번</a>', korean)
+        self.assertIn('<p class="now-head">すぐ遊べるミッション<span>업데이트 ', korean)
+        self.write(self.config.read_text(encoding="utf-8") + '\n[[site]]\nmount = "/memo"\nfolder = "Memo"\nname = "Memo"\n')
+        status, headers, body = call(self.portal, "/memo/", HTTP_COOKIE="lang=en-GB")
+        self.assertIn('title="Back to all sites"', body)
+        self.assertIn("All sites</a>", body)
+        self.assertNotEqual(headers["ETag"], call(self.portal, "/memo/")[1]["ETag"])
+        self.assertIn("Cookie", headers["Vary"])
+
+    def test_a_missing_page_shows_the_way_back_to_browsers(self):
+        status, headers, page = call(self.portal, "/infra/nothing.html", HTTP_ACCEPT="text/html,*/*", HTTP_COOKIE="lang=ko")
+        self.assertEqual(status, 404)
+        self.assertIn('<html lang="ko">', page)
+        self.assertIn("페이지를 찾을 수 없습니다", page)
+        self.assertIn('<a class="open" href="/infra/">CoreLab 첫 화면으로</a>', page)
+        self.assertIn('href="/"><span class="arrow-back" aria-hidden="true">←</span>사이트 목록</a>', page)
+        self.assertEqual(call(self.portal, "/infra/nothing.js")[2], "Not Found")  # not a browser page
+        alone = homepage.build([], config=self.config)
+        status, _, page = call(alone, "/nothing", HTTP_ACCEPT="text/html")
+        self.assertEqual(status, 404)
+        self.assertIn("ページが見つかりません", page)
+        self.assertNotIn("のトップへ", page)
+
     def test_this_folders_own_sites_toml_reads_cleanly(self):
         from dataclasses import replace
         portal = homepage.build([replace(NEWS, key="/news")])  # as the server loads the Python site

@@ -42,8 +42,6 @@ THREADS = 16
 FUNNEL_SUFFIX = ".ts.net"
 TAILSCALE = ipaddress.ip_network("100.64.0.0/10")
 LOOPBACK = "127.0.0.1"
-#: Python sites whose own hosting entry is not there yet: the stand-in this package has for them.
-COMPAT = {"newsreader.hosting:site": "homepage.compat:news_site"}
 
 
 @dataclass
@@ -237,15 +235,7 @@ def load_python_sites(entries: list, base: Path, host: dict) -> tuple[list[App],
 
 def _factory(target: str):
     module_name, _, name = target.partition(":")
-    try:
-        module = importlib.import_module(module_name)
-    except ModuleNotFoundError as exc:
-        if exc.name != module_name or target not in COMPAT:
-            raise
-        print(f"{target} がまだないので、Home Page の代わりの読み込み口（{COMPAT[target]}）を使います。", flush=True)
-        module_name, _, name = COMPAT[target].partition(":")
-        module = importlib.import_module(module_name)
-    return getattr(module, name)
+    return getattr(importlib.import_module(module_name), name)
 
 
 def _version(app: App) -> str:

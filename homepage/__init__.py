@@ -7,6 +7,10 @@ A site is either a folder of static files (``folder = ...`` in sites.toml, serve
 or a Python web app (``python = ...``, ``entry = ...``) that the server (homepage.server) loads at
 its start and hands over as an ``App``. ``python -m homepage`` serves the folder sites alone (and,
 with ``--demo``, a stand-in News Site), for trying out a change.
+
+Every page is shown in the visitor's language (homepage.i18n: Japanese, Korean, British English,
+Traditional Chinese); sites.toml's texts are Japanese, with ``[ko]``, ``[en-GB]``, ``[zh-TW]`` tables
+(and ``[site.ko]`` ... under a ``[[site]]``) for the other languages.
 """
 from __future__ import annotations
 
@@ -17,11 +21,14 @@ import json
 import re
 import threading
 import time
+import inspect
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote
+
+from homepage import i18n
 
 PACKAGE = Path(__file__).resolve().parent
 HOME = PACKAGE.parent
@@ -30,6 +37,9 @@ JST = timezone(timedelta(hours=9))
 MOUNT = re.compile(r"/[a-z0-9][a-z0-9-]*")
 WORD = re.compile(r"[a-z0-9-]+")
 ACCENTS = ("red", "blue", "teal", "green", "amber", "purple", "gray")
+#: What a language table may say (sites.toml ``[ko]`` and so on, and ``[site.ko]`` under a site).
+PAGE_TEXTS = ("title", "lead", "points", "about")
+SITE_TEXTS = ("name", "subtitle", "description", "tags", "open")
 #: The portal's own addresses: no site may be mounted over them.
 OWN = ("/", "/portal.css", "/favicon.svg", "/robots.txt")
 #: How often sites.toml is looked at (it is re-read only when it changed).
@@ -39,7 +49,7 @@ CHECK_SECONDS = 1.0
 @dataclass
 class App:
     """A site the server provides: the WSGI ``app`` at ``mount``, listed with these texts unless
-    sites.toml says otherwise. ``preview()`` returns what the site has now:
+    sites.toml says otherwise. ``preview(lang)`` (or ``preview()``) returns what the site has now:
     ``{"title": str, "note": str, "items": [(text, path relative to the site)]}`` (title: the heading
     over the items, "新着" when left out; note: how fresh they are). ``disallow``: paths under the
     mount crawlers should not call. ``legacy``: this site also answers the addresses it had before
@@ -74,11 +84,21 @@ class Site:
     public: bool = True
     preview: object = None
     files: "StaticFiles | None" = None
+    #: lang -> {"name": ..., "subtitle": ..., "description": ..., "tags": (...), "open": ...} from sites.toml.
+    texts: dict = field(default_factory=dict)
 
-    def now(self) -> dict:
+    def say(self, lang: str, key: str):
+        """This site's ``key`` in ``lang``: sites.toml's translation, else its Japanese."""
+        default = {"name": self.name, "subtitle": self.subtitle, "description": self.description,
+                   "tags": self.tags, "open": self.open_label}[key]
+        return self.texts.get(lang, {}).get(key, default)
+
+    def now(self, lang: str = i18n.DEFAULT) -> dict:
         """The site's preview, or {} when it has none or it failed (the index never fails because of it)."""
         try:
-            return (self.preview() if self.preview else None) or {}
+            if not self.preview:
+                return {}
+            return (self.preview(lang) if _takes_an_argument(self.preview) else self.preview()) or {}
         except Exception:  # noqa: BLE001
             return {}
 
@@ -103,6 +123,8 @@ class Portal:
         self._checked = 0.0
         self._stamp: tuple | None = None  # None: not read yet
         self.settings: dict = {}
+        #: lang -> the page's texts in that language (sites.toml [ko] ...).
+        self.page_texts: dict = {}
         self.sites: list[Site] = []
         self.problems: list[str] = []
         self.refresh()
@@ -130,6 +152,11 @@ class Portal:
                 return
             self.settings = data
             self.sites, self.problems = self._sites(data)
+            try:
+                self.page_texts = _translations(data, PAGE_TEXTS)
+            except ValueError as exc:
+                self.page_texts = {}
+                self.problems.insert(0, f"sites.toml の言語の表: {exc}")
             self.problems[:0] = self.notes
             if not stamp:
                 self.problems.insert(0, f"{self.config} がありません。サーバーが用意するサイトだけを表示しています。")
@@ -174,7 +201,7 @@ class Portal:
         if not isinstance(tags, list) or not all(isinstance(tag, str) for tag in tags):
             raise ValueError("tags は文字列の並び（[\"…\", \"…\"]）です。")
         common = dict(icon=text["icon"], accent=accent, tags=tuple(tags), open_label=text["open"],
-                      listed=_flag(entry, "listed"), public=_flag(entry, "public"))
+                      listed=_flag(entry, "listed"), public=_flag(entry, "public"), texts=_translations(entry, SITE_TEXTS))
         if "app" in entry or "python" in entry:
             item = self.apps.get(_text(entry, "app") or _text(entry, "mount"))
             if item is None:  # not loaded (the server's note says why) or not provided (python -m homepage)
@@ -198,7 +225,7 @@ class Portal:
             file = (root / text["preview"]).resolve()
             if file.suffix.lower() != ".json" or not file.is_relative_to(root):
                 raise ValueError("preview はそのフォルダの中の .json ファイルです（例: \"portal.json\"）。")
-            preview = lambda: _preview_file(file)  # noqa: E731
+            preview = lambda lang: _preview_file(file, lang)  # noqa: E731
         files = StaticFiles(root, self.allowed_hosts, home_link=_text(entry, "home_link") != "own")
         return Site(mount, text["name"], files, text["subtitle"], text["description"], files=files,
                     preview=preview, **common)
@@ -210,15 +237,19 @@ class Portal:
         path = environ.get("PATH_INFO", "") or "/"
         method = environ.get("REQUEST_METHOD", "GET")
         visitor = self._visitor(environ)
+        asked = i18n.asked(environ)
+        if asked:  # ?lang=ko on any address: remembered for every site, and the same address without it
+            return _redirect(start_response, environ.get("SCRIPT_NAME", "") + path, dict(environ, QUERY_STRING=asked[1]),
+                             headers=[i18n.set_cookie(asked[0], environ.get("wsgi.url_scheme") == "https")])
         for site in self.sites:
             if path == site.mount or path.startswith(site.mount + "/"):
                 if visitor and not site.public:
-                    return _plain(start_response, "404 Not Found", b"Not Found")
+                    return _not_found(environ, start_response)
                 if path == site.mount:
                     return _redirect(start_response, environ.get("SCRIPT_NAME", "") + site.mount + "/", environ)
                 outer = environ.get("SCRIPT_NAME", "")
                 environ = dict(environ, SCRIPT_NAME=outer + site.mount, PATH_INFO=path[len(site.mount):],
-                               **{"homepage.home": outer + "/"})
+                               **{"homepage.home": outer + "/", "homepage.site": site.say(i18n.chosen(environ), "name")})
                 return site.app(environ, start_response)
         if path in OWN:
             if self.allowed_hosts is not None and not self.allowed_hosts(environ.get("HTTP_HOST", "")):
@@ -232,13 +263,13 @@ class Portal:
             if path == "/robots.txt":
                 return _send(start_response, "text/plain; charset=utf-8", self.robots().encode(), "public, max-age=86400")
             body = self.index(environ, visitor).encode("utf-8")
-            return _send(start_response, "text/html; charset=utf-8", body, "no-cache")
+            return _send(start_response, "text/html; charset=utf-8", body, "no-cache", vary=True)
         legacy = next((item for item in self.apps.values() if item.legacy is not None), None)
         if legacy is not None:
             if path.startswith(legacy.legacy) or method not in ("GET", "HEAD"):
                 return legacy.app(environ, start_response)
             return _redirect(start_response, legacy.mount + path, environ, permanent=True)
-        return _plain(start_response, "404 Not Found", b"Not Found")
+        return _not_found(environ, start_response)
 
     def _visitor(self, environ) -> bool:
         return self.visitor_hosts is not None and bool(self.visitor_hosts(environ.get("HTTP_HOST", "")))
@@ -253,8 +284,9 @@ class Portal:
 
     def index(self, environ, visitor: bool) -> str:
         shown = [site for site in self.sites if site.listed and (site.public or not visitor)]
-        settings = self.settings
-        title = _setting(settings, "title", "サイト一覧")
+        lang = i18n.chosen(environ)
+        settings = {**self.settings, **self.page_texts.get(lang, {})}
+        title = _setting(settings, "title", i18n.text(lang, "サイト一覧"))
         lead = _setting(settings, "lead", "")
         points = settings.get("points", [])
         points = [p for p in points if isinstance(p, str)] if isinstance(points, list) else []
@@ -265,42 +297,47 @@ class Portal:
         home = environ.get("SCRIPT_NAME", "") + "/"
         e = html.escape
         values = {
+            "lang": lang,
+            "locale": i18n.LOCALES[lang],
+            "menu": i18n.menu(lang),
             "title": e(title),
             "description": e(lead or title),
             "url": e(f"{scheme}://{host}{quote(home)}") if host else "",
             "css": e(f"{home}portal.css?v={_version(PACKAGE / 'portal.css')}"),
             "icon": e(f"{home}favicon.svg"),
-            "date": f"{today.year}年{today.month}月{today.day}日（{'月火水木金土日'[today.weekday()]}）",
+            "date": e(i18n.date(lang, today)),
             "lead": f'<p class="lead">{e(lead)}</p>' if lead else "",
             "points": ('<ul class="points">' + "".join(f"<li>{e(p)}</li>" for p in points) + "</ul>") if points else "",
-            "sites": "\n".join(self._card(site, n, visitor) for n, site in enumerate(shown, 1)),
-            "count": str(len(shown)),
+            "sites": "\n".join(self._card(site, n, visitor, lang) for n, site in enumerate(shown, 1)),
+            "count": e(i18n.text(lang, "サイト {count} 件", count=len(shown))),
             "about": f"<p>{e(about)}</p>" if about else "",
             "owner": "" if visitor else self._owner_note(),
         }
         page = _read(PACKAGE / "page.html").decode("utf-8")
         return re.sub(r"\{\{ (\w+) \}\}", lambda m: values.get(m.group(1), ""), page)
 
-    def _card(self, site: Site, number: int, visitor: bool) -> str:
+    def _card(self, site: Site, number: int, visitor: bool, lang: str = i18n.DEFAULT) -> str:
         e = html.escape
         href = e(site.mount + "/")
-        sub = f'<p class="sub">{e(site.subtitle)}</p>' if site.subtitle else ""
-        description = f'<p class="desc">{e(site.description)}</p>' if site.description else ""
-        chips = list(site.tags) + ([] if site.public or visitor else ["非公開（このPCからだけ）"])
-        tags = ('<ul class="tags" aria-label="特徴">' + "".join(f"<li>{e(t)}</li>" for t in chips) + "</ul>") if chips else ""
-        now = site.now()
+        name, subtitle, description = site.say(lang, "name"), site.say(lang, "subtitle"), site.say(lang, "description")
+        sub = f'<p class="sub">{e(subtitle)}</p>' if subtitle else ""
+        description = f'<p class="desc">{e(description)}</p>' if description else ""
+        chips = list(site.say(lang, "tags")) + ([] if site.public or visitor else [i18n.text(lang, "非公開（このPCからだけ）")])
+        tags = (f'<ul class="tags" aria-label="{e(i18n.text(lang, "特徴"))}">' + "".join(f"<li>{e(t)}</li>" for t in chips)
+                + "</ul>") if chips else ""
+        now = site.now(lang)
         items = "".join(f'<li><a href="{e(site.mount + path)}">{e(text)}</a></li>' for text, path in now.get("items", []))
         note = now.get("note", "")
         updated = site.updated()
         if not note and updated:
-            note = f"更新 {updated.month}月{updated.day}日"
-        heading = now.get("title") or "新着"
+            note = i18n.updated(lang, updated)
+        heading = now.get("title") or i18n.text(lang, "新着")
         preview = (f'<div class="now"><p class="now-head">{e(heading)}'
                    f'{f"<span>{e(note)}</span>" if note else ""}</p><ul>{items}</ul></div>') if items else ""
         status = f'<span class="status">{e(note)}</span>' if note and not items else ""
-        label = site.open_label or f"{site.name} を開く"
+        label = site.say(lang, "open") or i18n.text(lang, "{name} を開く", name=name)
         return (f'<li class="site accent-{site.accent}">\n<div class="site-head">{self._icon(site)}'
-                f'<div class="site-name"><h2><a href="{href}">{e(site.name)}</a></h2>{sub}</div>'
+                f'<div class="site-name"><h2><a href="{href}">{e(name)}</a></h2>{sub}</div>'
                 f'<span class="no" aria-hidden="true">{number:02d}</span></div>\n'
                 f'{description}{tags}{preview}\n'
                 f'<p class="go"><a class="open" href="{href}">{e(label)}<span class="arrow" aria-hidden="true">→</span></a>{status}</p>\n</li>')
@@ -338,10 +375,10 @@ class StaticFiles:
     #: The site's own files only; inline style attributes and data: images are allowed, nothing is fetched elsewhere.
     CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
            "connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
-    HOME_LINK = ('<a href="{home}" title="サイト一覧へ戻る" style="position:fixed;left:12px;bottom:12px;z-index:2147483647;'
+    HOME_LINK = ('<a href="{home}" title="{title}" style="position:fixed;left:12px;bottom:12px;z-index:2147483647;'
                  'display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 14px;border-radius:18px;'
                  'background:rgba(28,27,25,.9);color:#fff;font:600 13px/1 system-ui,sans-serif;text-decoration:none;'
-                 'box-shadow:0 2px 8px rgba(0,0,0,.3)"><span aria-hidden="true">←</span>サイト一覧</a>')
+                 'box-shadow:0 2px 8px rgba(0,0,0,.3)"><span aria-hidden="true">←</span>{label}</a>')
     #: Files looked at for the "更新" date, and how long the date is kept.
     NEWEST_FILES, NEWEST_SECONDS = 2000, 60.0
     #: Types sent gzipped (the rest are compressed already), from this size up.
@@ -370,10 +407,12 @@ class StaticFiles:
                 or not file.is_relative_to(self.root)
                 or any(part.startswith(".") for part in file.relative_to(self.root).parts)
                 or file.suffix.lower() not in self.TYPES or not file.is_file()):
-            return _plain(start_response, "404 Not Found", b"Not Found")
+            return _not_found(environ, start_response, environ.get("homepage.site", ""))
         kind = self.TYPES[file.suffix.lower()]
         stamp = _stamp(file)
         home = environ.get("homepage.home", "/") if self.home_link and kind.startswith("text/html") else ""
+        if home:  # the way back is in the visitor's language
+            home = f"{home}\n{i18n.chosen(environ)}"
         packed = (file.suffix.lower() in self.GZIP_TYPES and stamp[1] >= self.GZIP_MIN
                   and "gzip" in environ.get("HTTP_ACCEPT_ENCODING", "").lower())
         tag = '"' + hashlib.sha1(f"{stamp}{home}".encode()).hexdigest()[:16] + ('-gz"' if packed else '"')
@@ -381,6 +420,8 @@ class StaticFiles:
                    ("Last-Modified", _http_date(stamp[0])), ("Vary", "Accept-Encoding"),
                    ("Content-Security-Policy", self.CSP), ("X-Content-Type-Options", "nosniff"),
                    ("Referrer-Policy", "same-origin")]
+        if home:
+            headers[4] = ("Vary", "Accept-Encoding, Cookie, Accept-Language")
         if tag in environ.get("HTTP_IF_NONE_MATCH", ""):
             start_response("304 Not Modified", headers)
             return [b""]
@@ -403,7 +444,9 @@ class StaticFiles:
         return body
 
     def _with_home_link(self, body: bytes, home: str) -> bytes:
-        link = self.HOME_LINK.format(home=html.escape(home)).encode("utf-8")
+        home, _, lang = home.partition("\n")
+        link = self.HOME_LINK.format(home=html.escape(home), title=html.escape(i18n.text(lang, "サイト一覧へ戻る")),
+                                     label=html.escape(i18n.text(lang, "サイト一覧"))).encode("utf-8")
         at = body.lower().rfind(b"</body>")
         return body[:at] + link + body[at:] if at >= 0 else body + link
 
@@ -467,13 +510,52 @@ def _http_date(mtime_ns: int) -> str:
     return formatdate(mtime_ns / 1_000_000_000, usegmt=True)
 
 
-def _preview_file(file: Path) -> dict:
+def _preview_file(file: Path, lang: str = i18n.DEFAULT) -> dict:
     """A folder site's preview, from the JSON file sites.toml names (read again when it changes):
-    {"title": "見出し", "note": "ひとこと", "items": [["文", "/path/in/the/site"], ...]}."""
+    {"title": "見出し", "note": "ひとこと", "items": [["文", "/path/in/the/site"], ...]}. Any text can
+    instead be {"ja": "見出し", "ko": "...", "en-GB": "...", "zh-TW": "..."} (Japanese when the language is missing)."""
     data = json.loads(_read(file).decode("utf-8"))
-    items = [(text, path) for text, path in data.get("items", [])
-             if isinstance(text, str) and isinstance(path, str) and path.startswith("/")]
-    return {"title": str(data.get("title", "")), "note": str(data.get("note", "")), "items": items[:5]}
+
+    def say(value):
+        if isinstance(value, dict):
+            value = value.get(lang, value.get(i18n.DEFAULT, ""))
+        return value if isinstance(value, str) else None
+    items = [(say(text), path) for text, path in data.get("items", [])]
+    items = [(text, path) for text, path in items if text and isinstance(path, str) and path.startswith("/")]
+    return {"title": say(data.get("title", "")) or "", "note": say(data.get("note", "")) or "", "items": items[:5]}
+
+
+def _translations(entry: dict, keys: tuple) -> dict:
+    """sites.toml's language tables (``[ko]``, ``[site.en-GB]`` ...): lang -> {key: text} with the keys allowed."""
+    found = {}
+    for lang in i18n.LANGS:
+        table = entry.get(lang)
+        if table is None:
+            continue
+        if not isinstance(table, dict):
+            raise ValueError(f"[{lang}] は表（[{lang}] の下に key = \"…\"）です。")
+        texts = {}
+        for key in keys:
+            if key not in table:
+                continue
+            value = table[key]
+            if key in ("tags", "points"):
+                if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+                    raise ValueError(f"[{lang}] の {key} は文字列の並び（[\"…\", \"…\"]）です。")
+                value = tuple(value) if key == "tags" else value
+            elif not isinstance(value, str):
+                raise ValueError(f"[{lang}] の {key} は文字列（\"…\"）です。")
+            texts[key] = value
+        found[lang] = texts
+    return found
+
+
+def _takes_an_argument(function) -> bool:
+    try:
+        return any(p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD, p.VAR_POSITIONAL)
+                   for p in inspect.signature(function).parameters.values())
+    except (TypeError, ValueError):
+        return False
 
 
 def _version(path: Path) -> str:
@@ -512,9 +594,35 @@ def _headers(content_type: str, length: int, cache: str) -> list[tuple[str, str]
             ("X-Content-Type-Options", "nosniff"), ("Referrer-Policy", "same-origin")]
 
 
-def _send(start_response, content_type: str, body: bytes, cache: str):
-    start_response("200 OK", _headers(content_type, len(body), cache))
+def _send(start_response, content_type: str, body: bytes, cache: str, vary: bool = False, status: str = "200 OK"):
+    """``vary``: the page is in the visitor's language."""
+    headers = _headers(content_type, len(body), cache)
+    if vary:
+        headers.append(("Vary", "Cookie, Accept-Language"))
+    start_response(status, headers)
     return [body]
+
+
+def _not_found(environ, start_response, site: str = ""):
+    """404: a page in the visitor's language with the way back for browsers, two words for the rest."""
+    if "text/html" not in environ.get("HTTP_ACCEPT", ""):
+        return _plain(start_response, "404 Not Found", b"Not Found")
+    lang = i18n.chosen(environ)
+    e = html.escape
+    home = environ.get("homepage.home", environ.get("SCRIPT_NAME", "") + "/")
+    links = f'<a class="open" href="{e(home)}"><span class="arrow-back" aria-hidden="true">←</span>{e(i18n.text(lang, "サイト一覧"))}</a>'
+    if site:
+        links = (f'<a class="open" href="{e(environ.get("SCRIPT_NAME", "") + "/")}">{e(i18n.text(lang, "{name} のトップへ", name=site))}</a>'
+                 + links.replace('class="open"', 'class="back"'))
+    heading = e(i18n.text(lang, "ページが見つかりません"))
+    body = (f'<!doctype html><html lang="{lang}"><head><meta charset="utf-8">'
+            f'<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">'
+            f'<title>{heading}</title><link rel="icon" href="{e(home)}favicon.svg" type="image/svg+xml">'
+            f'<link rel="stylesheet" href="{e(home)}portal.css"></head><body class="missing"><main>'
+            f'<p class="date">{e(i18n.text(lang, "エラー {status}", status=404))}</p><h1>{heading}</h1>'
+            f'<p class="lead">{e(i18n.text(lang, "アドレスが変わったか、なくなった可能性があります。"))}</p>'
+            f'<p class="go">{links}</p></main></body></html>').encode("utf-8")
+    return _send(start_response, "text/html; charset=utf-8", body, "no-cache", vary=True, status="404 Not Found")
 
 
 def _plain(start_response, status: str, body: bytes):
@@ -523,9 +631,9 @@ def _plain(start_response, status: str, body: bytes):
     return [body]
 
 
-def _redirect(start_response, target: str, environ, permanent: bool = False):
+def _redirect(start_response, target: str, environ, permanent: bool = False, headers=()):
     query = environ.get("QUERY_STRING", "")
     location = quote(target, safe="/%:@!$&'()*+,;=-._~") + (f"?{query}" if query else "")
     start_response("308 Permanent Redirect" if permanent else "302 Found",
-                   [("Location", location), ("Content-Length", "0")])
+                   [("Location", location), ("Content-Length", "0"), *headers])
     return [b""]

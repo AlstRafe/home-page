@@ -7,6 +7,25 @@ lead = "個人のパソコンから配信している、小さなサイトの入
 points = ["登録不要", "無料", "スマホでも使えます"]
 about = "どのサイトも個人が試験的に公開しているもので、内容や公開は予告なく変わることがあります。"
 
+# ほかの言語（訪問者が右上のメニューで選ぶ。ない項目は日本語のまま）。各サイトの [site.ko] なども同じ形。
+[ko]
+title = "사이트 목록"
+lead = "개인 PC에서 운영하는 작은 사이트들의 입구입니다. 관심 있는 사이트를 골라 열어 보세요."
+points = ["회원가입 불필요", "무료", "스마트폰에서도 사용 가능"]
+about = "모든 사이트는 개인이 시험적으로 공개하는 것으로, 내용과 공개 여부는 예고 없이 바뀔 수 있습니다."
+
+[en-GB]
+title = "All sites"
+lead = "The way in to a few small sites served from a personal computer. Pick one that interests you and open it."
+points = ["No sign-up", "Free", "Works on phones"]
+about = "Every site here is a personal experiment; content and availability may change without notice."
+
+[zh-TW]
+title = "網站列表"
+lead = "這裡是從個人電腦提供的幾個小網站的入口。挑一個感興趣的打開看看吧。"
+points = ["免註冊", "免費", "手機也能用"]
+about = "每個網站都是個人試驗性公開的，內容與公開狀態可能隨時變更，恕不另行通知。"
+
 # サーバー（launcher.py が起動）。ここと Python サイトの指定を変えると、サーバーが自動で再起動します。
 [server]
 port = 5000          # テスト公開（Tailscale Funnel）はこの番号の 127.0.0.1 へ転送している
@@ -30,6 +49,10 @@ listen = "network"   # "network": Tailscale・LAN・このPC / "local": このPC
 # home_link = "own"                # 自前の「サイト一覧へ戻る」リンクがあるとき。省略するとポータルが左下に付ける
 # preview = "portal.json"          # カードに並べる中身（そのフォルダの JSON。書き換えると一覧に即反映）:
 #                                  # {"title": "見出し", "items": [["文", "/サイト内のパス"], ...]}（最大 5 件）
+#                                  # 文は {"ja": "…", "ko": "…", "en-GB": "…", "zh-TW": "…"} でもよい
+#
+# [site.en-GB]                     # ほかの言語での name・subtitle・description・tags・open（ko / en-GB / zh-TW）
+# description = "One or two sentences for a first-time visitor"
 #
 # Python の Web アプリ（WSGI）は folder の代わりに python と entry を書く（サーバーの起動時に読み込む）:
 # python = "../MyApp"              # sys.path に足すフォルダ（requirements.txt があれば launcher が入れる）
@@ -47,14 +70,44 @@ icon = "news"
 accent = "red"
 tags = ["毎時更新", "英・中・韓 → 日本語", "各社の読み比べ"]
 
+[site.ko]
+subtitle = "번역해서 비교해 읽는 뉴스"
+description = "BBC·중앙통신사(CNA)·연합뉴스와 기술 매체 InfoQ·iThome 등을 매시간 모읍니다. 원문과 일본어 번역을 나란히 놓고, 같은 뉴스를 매체별로 비교해 읽을 수 있습니다."
+tags = ["매시간 업데이트", "영·중·한 → 일본어", "매체별 비교"]
+
+[site.en-GB]
+subtitle = "The news, translated and compared"
+description = "Collects the BBC, CNA, Yonhap and tech outlets such as InfoQ and iThome every hour. Read each original beside its Japanese translation, and compare how the outlets covered the same story."
+tags = ["Updated hourly", "EN · ZH · KO → Japanese", "Compare the outlets"]
+
+[site.zh-TW]
+subtitle = "翻譯後比較閱讀的新聞"
+description = "每小時收集 BBC、中央社、韓聯社，以及 InfoQ、iThome 等科技媒體。原文與日文譯文並列，可比較各家媒體如何報導同一則新聞。"
+tags = ["每小時更新", "英・中・韓 → 日文", "各家媒體比較"]
+
 [[site]]
 mount = "/infra"
 folder = "../Infra Game"
 name = "CoreLab"
 subtitle = "インフラ運用トレーニングゲーム"
-description = "Kubernetes・Docker・Harbor・OpenShift・AWS のよくある障害を、ブラウザの中のターミナルで解決しながら学べます。操作はすべて架空データのシミュレーションです。"
+description = "Kubernetes・Docker・Harbor・OpenShift・AWS のよくある障害を、ブラウザの中のターミナルで解決しながら学べます。分野別の学習問題 333 問（資格 60 試験の対策つき）とコマンド辞典も。操作はすべて架空データのシミュレーションです。"
 icon = "terminal"
 accent = "teal"
 tags = ["インストール不要", "Linux 基礎から 19 ミッション", "架空データで安全"]
 home_link = "own"
 preview = "portal.json"            # 「すぐ遊べるミッション」（Infra Game 側で管理）
+
+[site.ko]
+subtitle = "인프라 운영 트레이닝 게임"
+description = "Kubernetes·Docker·Harbor·OpenShift·AWS에서 흔히 일어나는 장애를 브라우저 속 터미널로 해결하며 배웁니다. 분야별 학습 문제 333문항(자격증 60종 대비)과 명령어 사전도 있습니다. 모든 조작은 가상 데이터로 하는 시뮬레이션입니다."
+tags = ["설치 불필요", "Linux 기초부터 19개 미션", "가상 데이터라 안전"]
+
+[site.en-GB]
+subtitle = "Infrastructure operations training game"
+description = "Learn by fixing common Kubernetes, Docker, Harbor, OpenShift and AWS failures in a terminal inside your browser. Also 333 practice questions by subject (covering 60 certifications) and a command reference. Everything is a simulation with fictional data."
+tags = ["Nothing to install", "19 missions from Linux basics up", "Safe: all data is fictional"]
+
+[site.zh-TW]
+subtitle = "基礎架構維運訓練遊戲"
+description = "在瀏覽器裡的終端機排除 Kubernetes、Docker、Harbor、OpenShift、AWS 的常見故障，邊做邊學。另有 333 題分領域練習題（涵蓋 60 項認證考試）與指令辭典。所有操作都是使用虛構資料的模擬。"
+tags = ["免安裝", "從 Linux 基礎開始的 19 個任務", "虛構資料，安全無虞"]

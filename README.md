@@ -11,7 +11,7 @@ launcher.py           起動役: 仮想環境の準備、ログオン時の自�
 start.bat             launcher.py をダブルクリックで動かす
 homepage/server.py    サーバー本体（waitress）: 待ち受け、ホスト名の確認、テスト公開の https/noindex、自動再起動
 homepage/__init__.py  ポータル（WSGI）: 振り分け、一覧ページ、静的サイトの配信
-homepage/compat.py    News Site に newsreader.hosting が入るまでの代わりの読み込み口（入ったら消す）
+homepage/i18n.py      言語（日本語・한국어・English (UK)・中文（台灣））: 訪問者の選択、ブラウザの言語、言語メニュー、ページの文言
 homepage/page.html    一覧ページのひな形 / portal.css 見た目 / icons/*.svg アイコン / favicon.svg
 homepage/__main__.py  python -m homepage --demo: 一覧の見た目だけを試す小さなサーバー
 tests/                python -m unittest discover -s tests
@@ -64,22 +64,28 @@ python -m homepage --demo
 
 → http://127.0.0.1:5055/
 
+## 言語
+
+どのサイトも日本語・韓国語・英語（英国）・繁体字中国語（台湾）で表示できる。
+
+- 訪問者は各サイトの右上の言語メニュー（地球のマーク）で選ぶ。選んだ言語は `lang` クッキー（このホスト全体）に残り、一覧・NewsBridge・CoreLab のどれでも同じ言語になる
+- まだ選んでいなければブラウザの言語（Accept-Language）で決める。対応していない言語だけなら英語、何も送ってこなければ日本語
+- どのアドレスでも `?lang=ko`（`ja` `ko` `en-GB` `zh-TW`）を付けると、その言語を覚えて同じアドレスへ戻す（ポータルが受けるので、静的サイトも Python サイトも同じ）
+- 一覧ページの文言は sites.toml の `[ko]` `[en-GB]` `[zh-TW]`、各サイトの紹介は `[[site]]` の下の `[site.ko]` など。書いていない項目は日本語のまま
+- `preview` の JSON の文は `{"ja": "…", "ko": "…", "en-GB": "…", "zh-TW": "…"}` でもよい。Python サイトの `preview` は言語を1つ受け取れる（`preview(lang)`）
+- 見つからないページは、ブラウザには訪問者の言語で「ページが見つかりません」とサイトのトップ・サイト一覧へのリンクを返す
+
 ## News Site との関係
 
 - News Site は sites.toml の `python = "../News Site/work/app"`、`entry = "newsreader.hosting:site"` でこのサーバーに読み込まれる（同じプロセスで動く）
-- 読み込まれた News Site は、自分のログオン時の自動起動を外し、`instance\hosted.json` に配信先を書く。News Site の launcher.py は、このサーバーが動いていれば2台目を起動せずにここを開く（パッチ適用後）
+- 読み込まれた News Site は、自分のログオン時の自動起動を外し、`instance\hosted.json` に配信先を書く。News Site の launcher.py は、このサーバーが動いていれば2台目を起動せずにここを開く
 - News Site 単体（他のPC・テスト版）は今までどおり自分で起動し、`/` は `/news/` へ転送される
 - 旧アドレス（`/a/123` など）は `/news/…` へ 308 転送、`/relay/…` はそのまま News Site が答える
 - `News Site\work\app` には直接コミットしない。News Site 側の変更はパッチにして News Site プロジェクトに取り込んでもらう
 
 ## 取り込み待ち
 
-- `News Site\work\scratch\home-page-server-20261024.patch`（控え: `patches/`、1 コミット）
-  - `newsreader/hosting.py`（このサーバー向けの読み込み口）を追加、`newsreader/portal` を News Site 単体用に縮小（一覧ページ・CoreLab 配信を削除）、launcher.py が Home Page 配信中は2台目を起動しない、テスト更新
-  - 取り込まれるまでは `homepage/compat.py` が代わりを務める。取り込み後の配備（VERSION の更新）でサーバーが再起動し、自動で hosting.py に切り替わる。その後 compat.py と server.py の `COMPAT` を消す
-- `News Site\work\scratch\news-site-ux-20261024.patch`（控え: `patches/`、1 コミット。上のパッチの後に当てる）
-  - スマホの下部メニューに「サイト一覧」（上のメニューの「サイト一覧」はスマホでは隠れていた）
-  - 一覧ページの NewsBridge カードの見出しを、訳済みのものから並べる（取得したばかりの英語・韓国語の見出しが先頭に出ない）
+（なし。取り込み済みのパッチの控えは `patches/`）
 
 ## 今後の候補
 
