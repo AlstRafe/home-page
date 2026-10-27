@@ -7,6 +7,7 @@
 :lang(ko){--serif:"AppleMyungjo","Nanum Myeongjo","Batang","Noto Serif KR",serif;--sans:"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",system-ui,sans-serif;}
 :lang(zh-TW){--serif:"Songti TC","PMingLiU","Noto Serif TC",serif;--sans:"PingFang TC","Microsoft JhengHei","Noto Sans TC",system-ui,sans-serif;}
 :lang(en){--serif:Georgia,"Times New Roman",serif;--sans:system-ui,-apple-system,"Segoe UI",sans-serif;}
+html:lang(ko) body{word-break:keep-all;overflow-wrap:anywhere;} /* Korean wraps between words, not inside them */
 .accent-red{--a:#a3231d;}.accent-blue{--a:#1f5fbf;}.accent-teal{--a:#0f6f68;}.accent-green{--a:#2c7430;}
 .accent-amber{--a:#8f5400;}.accent-purple{--a:#6b3fa0;}.accent-gray{--a:#55524c;}
 @media (prefers-color-scheme:dark){.accent-red{--a:#e06a60;}.accent-blue{--a:#7aa7f0;}.accent-teal{--a:#38d6c4;}.accent-green{--a:#7cc47f;}

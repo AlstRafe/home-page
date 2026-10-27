@@ -85,7 +85,9 @@ python -m homepage --demo
 
 ## 取り込み待ち
 
-（なし。取り込み済みのパッチの控えは `patches/`）
+- `patches/news-site-i18n-20261027.patch`（News Site 用、6e3e1c4 の上に `git am`）: News Site の全画面を日本語・韓国語・英語（英国）・台湾華語に。ヘッダーの言語メニューと `?lang=` で選び、このサーバーと同じ `lang` クッキーを使う。訳は `newsreader/locale/<言語>.json`。取り込むまでは、言語を切り替えても /news だけ日本語のまま。
+
+取り込み済みのパッチの控えも `patches/` に置いている。
 
 ## 今後の候補
 
