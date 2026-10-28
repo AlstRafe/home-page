@@ -322,6 +322,7 @@ def main(argv: list[str] | None = None) -> int:
             "urls": [f"http://{item}:{settings.port}/" for item in hosts]}
     apps, notes = load_python_sites(settings.python_sites, config.parent, host)
     portal = build(apps, allowed_hosts=names.allowed, visitor_hosts=names.visitor, config=config, notes=notes)
+    portal.warm()
     started = {"code": code_stamp(), "settings": settings_stamp(config), **{app.mount: _version(app) for app in apps}}
 
     def reason(rounds: int) -> str | None:

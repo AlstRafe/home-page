@@ -106,7 +106,7 @@ clone_repos() {
       continue
     fi
     install -d -o "$ACCOUNT" -g "$ACCOUNT" "$(dirname "$ROOT/$dir")"
-    as_site git clone -q "git@github-$name:$OWNER/$name.git" "$ROOT/$dir"
+    as_site git clone -q -b master "git@github-$name:$OWNER/$name.git" "$ROOT/$dir"
     echo "$dir: 取得しました"
   done < <(repos)
   if [ ${#missing[@]} -gt 0 ]; then
@@ -126,13 +126,16 @@ requirements_stamp() {
   { printf '%s\n' "${PACKAGES[@]}"; cat "$ROOT/News Site/work/app/requirements.txt"; } | sha256sum | cut -d' ' -f1
 }
 
+# Every minute (update.sh): nothing but a checksum while the venv and the packages are in place.
 install_python_packages() {
-  local python stamp
-  python="$(pick_python)"
-  if [ ! -x "$VENV/bin/python" ]; then
-    as_site "$python" -m venv "$VENV"
-  fi
+  local stamp
   stamp="$(requirements_stamp)"
+  if [ -x "$VENV/bin/python" ] && [ "$(cat "$STATE/requirements" 2>/dev/null)" = "$stamp" ]; then
+    return 0
+  fi
+  if [ ! -x "$VENV/bin/python" ]; then
+    as_site "$(pick_python)" -m venv "$VENV"
+  fi
   if [ "$(cat "$STATE/requirements" 2>/dev/null)" != "$stamp" ]; then
     say "Python のパッケージ"
     as_site "$VENV/bin/python" -m pip install -q --upgrade pip

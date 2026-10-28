@@ -18,6 +18,7 @@ import gzip
 import hashlib
 import html
 import json
+import os
 import re
 import threading
 import time
@@ -44,6 +45,12 @@ SITE_TEXTS = ("name", "subtitle", "description", "tags", "open")
 OWN = ("/", "/portal.css", "/favicon.svg", "/robots.txt")
 #: How often sites.toml is looked at (it is re-read only when it changed).
 CHECK_SECONDS = 1.0
+#: How long a Python site's preview is shown before it is made again (in the background).
+PREVIEW_SECONDS = 60.0
+#: For a file asked for at its current version (``?v=``): a new version has a new address.
+IMMUTABLE = "public, max-age=31536000, immutable"
+#: Text answers from this size up are sent gzipped to browsers that take it.
+GZIP_MIN = 1024
 
 
 @dataclass
@@ -86,6 +93,11 @@ class Site:
     files: "StaticFiles | None" = None
     #: lang -> {"name": ..., "subtitle": ..., "description": ..., "tags": (...), "open": ...} from sites.toml.
     texts: dict = field(default_factory=dict)
+    #: Seconds a preview is shown before it is made again (0: made for every request).
+    keep: float = 0.0
+    _kept: dict = field(default_factory=dict, repr=False, compare=False)
+    _making: set = field(default_factory=set, repr=False, compare=False)
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
     def say(self, lang: str, key: str):
         """This site's ``key`` in ``lang``: sites.toml's translation, else its Japanese."""
@@ -94,13 +106,36 @@ class Site:
         return self.texts.get(lang, {}).get(key, default)
 
     def now(self, lang: str = i18n.DEFAULT) -> dict:
-        """The site's preview, or {} when it has none or it failed (the index never fails because of it)."""
-        try:
-            if not self.preview:
-                return {}
-            return (self.preview(lang) if _takes_an_argument(self.preview) else self.preview()) or {}
-        except Exception:  # noqa: BLE001
+        """The site's preview, or {} when it has none or it failed (the index never fails because of it).
+
+        With ``keep`` (a Python site's preview reads its database), a preview is made once and shown
+        for that many seconds; after that the next visitor still gets it at once while a new one is
+        made in the background, so the index never waits for it again."""
+        if not self.preview:
             return {}
+        if not self.keep:
+            return self._make(lang)
+        kept = self._kept.get(lang)
+        if kept is None:
+            return self._make(lang)
+        if time.monotonic() - kept[0] >= self.keep:
+            with self._lock:
+                start = lang not in self._making
+                self._making.add(lang)
+            if start:
+                threading.Thread(target=self._make, args=(lang,), name=f"preview {self.mount} {lang}", daemon=True).start()
+        return kept[1]
+
+    def _make(self, lang: str) -> dict:
+        try:
+            value = (self.preview(lang) if _takes_an_argument(self.preview) else self.preview()) or {}
+        except Exception:  # noqa: BLE001
+            value = {}
+        if self.keep:
+            self._kept[lang] = (time.monotonic(), value)
+            with self._lock:
+                self._making.discard(lang)
+        return value
 
     def updated(self) -> datetime | None:
         return self.files.newest() if self.files else None
@@ -161,6 +196,18 @@ class Portal:
             if not stamp:
                 self.problems.insert(0, f"{self.config} がありません。サーバーが用意するサイトだけを表示しています。")
 
+    def warm(self) -> threading.Thread:
+        """Makes the Python sites' previews in every language in the background, so that the first
+        visitors after the server starts do not wait for them."""
+        def run() -> None:
+            for site in list(self.sites):
+                if site.keep:
+                    for lang in i18n.LANGS:
+                        site.now(lang)
+        thread = threading.Thread(target=run, name="preview warm-up", daemon=True)
+        thread.start()
+        return thread
+
     def _sites(self, data: dict) -> tuple[list[Site], list[str]]:
         sites: list[Site] = []
         problems: list[str] = []
@@ -185,7 +232,7 @@ class Portal:
             if item.mount not in used:
                 used.add(item.mount)
                 sites.append(Site(item.mount, item.name, item.app, item.subtitle, item.description,
-                                  preview=item.preview))
+                                  preview=item.preview, keep=PREVIEW_SECONDS))
         return sites, problems
 
     def _site(self, entry) -> Site | None:
@@ -207,7 +254,7 @@ class Portal:
             if item is None:  # not loaded (the server's note says why) or not provided (python -m homepage)
                 return None
             return Site(item.mount, text["name"] or item.name, item.app, text["subtitle"] or item.subtitle,
-                        text["description"] or item.description, preview=item.preview, **common)
+                        text["description"] or item.description, preview=item.preview, keep=PREVIEW_SECONDS, **common)
         mount, folder = _text(entry, "mount"), _text(entry, "folder")
         if not MOUNT.fullmatch(mount):
             raise ValueError("mount は /infra のような、/ と英小文字・数字・ハイフンの名前です。")
@@ -256,14 +303,16 @@ class Portal:
                 return _plain(start_response, "400 Bad Request", b"Bad Request")
             if method not in ("GET", "HEAD"):
                 return _plain(start_response, "405 Method Not Allowed", b"Method Not Allowed")
-            if path == "/portal.css":
-                return _send(start_response, "text/css; charset=utf-8", _read(PACKAGE / "portal.css"), "public, max-age=86400")
+            if path == "/portal.css":  # the index asks for it at its version (?v=)
+                current = environ.get("QUERY_STRING", "") == f"v={_version(PACKAGE / 'portal.css')}"
+                return _send(start_response, "text/css; charset=utf-8", _read(PACKAGE / "portal.css"),
+                             IMMUTABLE if current else "public, max-age=86400", environ=environ)
             if path == "/favicon.svg":
                 return _send(start_response, "image/svg+xml", _read(PACKAGE / "favicon.svg"), "public, max-age=86400")
             if path == "/robots.txt":
                 return _send(start_response, "text/plain; charset=utf-8", self.robots().encode(), "public, max-age=86400")
             body = self.index(environ, visitor).encode("utf-8")
-            return _send(start_response, "text/html; charset=utf-8", body, "no-cache", vary=True)
+            return _send(start_response, "text/html; charset=utf-8", body, "no-cache", vary=True, environ=environ)
         legacy = next((item for item in self.apps.values() if item.legacy is not None), None)
         if legacy is not None:
             if path.startswith(legacy.legacy) or method not in ("GET", "HEAD"):
@@ -364,8 +413,11 @@ class StaticFiles:
     get a small "← サイト一覧" link back to the index (for sites that have none of their own).
 
     Every answer carries an ETag, so a browser that has the file asks again with it and gets a
-    bodiless 304 (a game's scripts are not fetched again over the Funnel on every visit), and text
-    is sent gzipped to browsers that take it (about a fifth of the bytes for scripts)."""
+    bodiless 304, and text is sent gzipped to browsers that take it (about a fifth of the bytes for
+    scripts). An HTML page's own scripts and styles are addressed with their version (``?v=``), and
+    a file asked for at its current version may be kept for a year: the next visit asks for the
+    page alone, not again for each of a game's dozens of scripts (each a trip over the Funnel to a
+    small server). A changed file gets a new version in the page, so it is fetched at once."""
 
     TYPES = {".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",
              ".js": "text/javascript; charset=utf-8", ".json": "application/json", ".svg": "image/svg+xml",
@@ -382,15 +434,19 @@ class StaticFiles:
     #: Files looked at for the "更新" date, and how long the date is kept.
     NEWEST_FILES, NEWEST_SECONDS = 2000, 60.0
     #: Types sent gzipped (the rest are compressed already), from this size up.
-    GZIP_TYPES, GZIP_MIN = (".html", ".css", ".js", ".json", ".svg", ".wasm"), 1024
+    GZIP_TYPES = (".html", ".css", ".js", ".json", ".svg", ".wasm")
+    #: A page's own scripts and styles: ``<script src="...">`` and ``<link href="...">`` with a relative address.
+    ASSET = re.compile(rb"""(<(?:script|link)\b[^>]*?\b(?:src|href)\s*=\s*)(["'])([^"'?#:<>\s/][^"'?#:<>\s]*)\2""", re.I)
 
     def __init__(self, root: Path, allowed_hosts=None, home_link: bool = True):
         self.root = Path(root).resolve()
         self.allowed_hosts = allowed_hosts
         self.home_link = home_link
         self._newest: tuple[float, datetime | None] = (0.0, None)
-        #: path -> (stamp, home, gzipped body): compressed once per change of the file.
-        self._gzipped: dict[Path, tuple[tuple, str, bytes]] = {}
+        #: (path, home) -> (what it was made from, gzipped body): compressed once per change of the file.
+        self._gzipped: dict[tuple[Path, str], tuple[tuple, bytes]] = {}
+        #: HTML path -> (stamp, [(asset, its stamp)], page with versions, the versions in one word).
+        self._pages: dict[Path, tuple[tuple, list, bytes, str]] = {}
 
     def __call__(self, environ, start_response):
         if self.allowed_hosts is not None and not self.allowed_hosts(environ.get("HTTP_HOST", "")):
@@ -400,23 +456,21 @@ class StaticFiles:
         parts = [part for part in environ.get("PATH_INFO", "").split("/") if part]
         if not parts or environ.get("PATH_INFO", "").endswith("/"):
             parts.append("index.html")
-        file = self.root.joinpath(*parts).resolve()
-        # The resolved path is checked too: on Windows a short name (CLAUDE~1) or a link reaches a
-        # dot folder that the address never names.
-        if (any(part.startswith(".") or "\\" in part or ":" in part or "~" in part for part in parts)
-                or not file.is_relative_to(self.root)
-                or any(part.startswith(".") for part in file.relative_to(self.root).parts)
-                or file.suffix.lower() not in self.TYPES or not file.is_file()):
+        file = self._file(parts)
+        if file is None:
             return _not_found(environ, start_response, environ.get("homepage.site", ""))
         kind = self.TYPES[file.suffix.lower()]
         stamp = _stamp(file)
-        home = environ.get("homepage.home", "/") if self.home_link and kind.startswith("text/html") else ""
+        is_page = kind.startswith("text/html")
+        page, versions = self._page(file, stamp) if is_page else (None, "")
+        home = environ.get("homepage.home", "/") if self.home_link and is_page else ""
         if home:  # the way back is in the visitor's language
             home = f"{home}\n{i18n.chosen(environ)}"
-        packed = (file.suffix.lower() in self.GZIP_TYPES and stamp[1] >= self.GZIP_MIN
+        packed = (file.suffix.lower() in self.GZIP_TYPES and stamp[1] >= GZIP_MIN
                   and "gzip" in environ.get("HTTP_ACCEPT_ENCODING", "").lower())
-        tag = '"' + hashlib.sha1(f"{stamp}{home}".encode()).hexdigest()[:16] + ('-gz"' if packed else '"')
-        headers = [("Content-Type", kind), ("Cache-Control", "no-cache"), ("ETag", tag),
+        tag = '"' + hashlib.sha1(f"{stamp}{home}{versions}".encode()).hexdigest()[:16] + ('-gz"' if packed else '"')
+        current = not is_page and environ.get("QUERY_STRING", "") == f"v={_short(stamp)}"
+        headers = [("Content-Type", kind), ("Cache-Control", IMMUTABLE if current else "no-cache"), ("ETag", tag),
                    ("Last-Modified", _http_date(stamp[0])), ("Vary", "Accept-Encoding"),
                    ("Content-Security-Policy", self.CSP), ("X-Content-Type-Options", "nosniff"),
                    ("Referrer-Policy", "same-origin")]
@@ -425,22 +479,59 @@ class StaticFiles:
         if tag in environ.get("HTTP_IF_NONE_MATCH", ""):
             start_response("304 Not Modified", headers)
             return [b""]
-        body = self._gzip(file, stamp, home) if packed else self._body(file, home)
+        body = self._gzip(file, (stamp, versions), home, page) if packed else self._body(file, home, page)
         if packed:
             headers.append(("Content-Encoding", "gzip"))
         start_response("200 OK", [*headers, ("Content-Length", str(len(body)))])
         return [body]
 
-    def _body(self, file: Path, home: str) -> bytes:
-        body = file.read_bytes()
+    def _file(self, parts: list[str]) -> Path | None:
+        """The file these address parts name, or None when it is not one this site serves."""
+        file = self.root.joinpath(*parts).resolve()
+        # The resolved path is checked too: on Windows a short name (CLAUDE~1) or a link reaches a
+        # dot folder that the address never names.
+        if (any(part.startswith(".") or "\\" in part or ":" in part or "~" in part for part in parts)
+                or not file.is_relative_to(self.root)
+                or any(part.startswith(".") for part in file.relative_to(self.root).parts)
+                or file.suffix.lower() not in self.TYPES or not file.is_file()):
+            return None
+        return file
+
+    def _page(self, file: Path, stamp: tuple) -> tuple[bytes, str]:
+        """An HTML page with its own scripts and styles addressed with their versions, and those
+        versions in one word (for the page's ETag); made again when the page or one of them changed."""
+        kept = self._pages.get(file)
+        if kept and kept[0] == stamp and all(_stamp(asset) == was for asset, was in kept[1]):
+            return kept[2], kept[3]
+        assets: list[tuple[Path, tuple]] = []
+        folder = list(file.parent.relative_to(self.root).parts)
+
+        def versioned(match: re.Match) -> bytes:
+            address = match.group(3).decode("utf-8", "replace")
+            asset = self._file(folder + [part for part in address.split("/") if part not in ("", ".")])
+            if asset is None or asset.suffix.lower() == ".html":
+                return match.group(0)
+            assets.append((asset, _stamp(asset)))
+            return match.group(1) + match.group(2) + f"{address}?v={_short(assets[-1][1])}".encode() + match.group(2)
+
+        try:
+            body = self.ASSET.sub(versioned, file.read_bytes())
+        except OSError:
+            return b"", ""
+        versions = hashlib.sha1(repr([was for _, was in assets]).encode()).hexdigest()[:16] if assets else ""
+        self._pages[file] = (stamp, assets, body, versions)
+        return body, versions
+
+    def _body(self, file: Path, home: str, page: bytes | None) -> bytes:
+        body = page if page is not None else file.read_bytes()
         return self._with_home_link(body, home) if home else body
 
-    def _gzip(self, file: Path, stamp: tuple, home: str) -> bytes:
-        kept = self._gzipped.get(file)
-        if kept and kept[:2] == (stamp, home):
-            return kept[2]
-        body = gzip.compress(self._body(file, home), compresslevel=6, mtime=0)
-        self._gzipped[file] = (stamp, home, body)
+    def _gzip(self, file: Path, made_from: tuple, home: str, page: bytes | None) -> bytes:
+        kept = self._gzipped.get((file, home))
+        if kept and kept[0] == made_from:
+            return kept[1]
+        body = gzip.compress(self._body(file, home, page), compresslevel=6, mtime=0)
+        self._gzipped[(file, home)] = (made_from, body)
         return body
 
     def _with_home_link(self, body: bytes, home: str) -> bytes:
@@ -457,17 +548,20 @@ class StaticFiles:
             return value
         latest = 0.0
         count = 0
-        try:
-            for file in self.root.rglob("*"):
-                if any(part.startswith(".") for part in file.relative_to(self.root).parts):
+        for folder, folders, names in os.walk(self.root):
+            folders[:] = [name for name in folders if not name.startswith(".")]  # never walks .git
+            for name in names:
+                if name.startswith(".") or os.path.splitext(name)[1].lower() not in self.TYPES:
                     continue
-                if file.suffix.lower() in self.TYPES and file.is_file():
-                    latest = max(latest, file.stat().st_mtime)
-                    count += 1
-                    if count >= self.NEWEST_FILES:
-                        break
-        except OSError:
-            pass
+                try:
+                    latest = max(latest, os.stat(os.path.join(folder, name)).st_mtime)
+                except OSError:
+                    continue
+                count += 1
+                if count >= self.NEWEST_FILES:
+                    break
+            if count >= self.NEWEST_FILES:
+                break
         value = datetime.fromtimestamp(latest, JST) if latest else None
         self._newest = (time.monotonic(), value)
         return value
@@ -560,7 +654,12 @@ def _takes_an_argument(function) -> bool:
 
 def _version(path: Path) -> str:
     stamp = _stamp(path)
-    return f"{stamp[0] // 1_000_000_000:x}" if stamp else "0"
+    return _short(stamp) if stamp else "0"
+
+
+def _short(stamp: tuple) -> str:
+    """A file's version for its address (``?v=``): from its modification time and size."""
+    return hashlib.sha1(repr(stamp).encode()).hexdigest()[:10]
 
 
 def _icon_svg(name: str) -> str:
@@ -594,11 +693,19 @@ def _headers(content_type: str, length: int, cache: str) -> list[tuple[str, str]
             ("X-Content-Type-Options", "nosniff"), ("Referrer-Policy", "same-origin")]
 
 
-def _send(start_response, content_type: str, body: bytes, cache: str, vary: bool = False, status: str = "200 OK"):
-    """``vary``: the page is in the visitor's language."""
+def _send(start_response, content_type: str, body: bytes, cache: str, vary: bool = False, status: str = "200 OK",
+          environ=None):
+    """``vary``: the page is in the visitor's language. ``environ``: gzipped when the browser takes it
+    (a page that fits the first packets of a new connection arrives a round trip sooner)."""
+    packed = environ is not None and len(body) >= GZIP_MIN and "gzip" in environ.get("HTTP_ACCEPT_ENCODING", "").lower()
+    if packed:
+        body = gzip.compress(body, compresslevel=6, mtime=0)
     headers = _headers(content_type, len(body), cache)
-    if vary:
-        headers.append(("Vary", "Cookie, Accept-Language"))
+    if packed:
+        headers.append(("Content-Encoding", "gzip"))
+    if vary or environ is not None:
+        headers.append(("Vary", ", ".join([*(["Accept-Encoding"] if environ is not None else []),
+                                            *(["Cookie", "Accept-Language"] if vary else [])])))
     start_response(status, headers)
     return [body]
 
@@ -622,7 +729,8 @@ def _not_found(environ, start_response, site: str = ""):
             f'<p class="date">{e(i18n.text(lang, "エラー {status}", status=404))}</p><h1>{heading}</h1>'
             f'<p class="lead">{e(i18n.text(lang, "アドレスが変わったか、なくなった可能性があります。"))}</p>'
             f'<p class="go">{links}</p></main></body></html>').encode("utf-8")
-    return _send(start_response, "text/html; charset=utf-8", body, "no-cache", vary=True, status="404 Not Found")
+    return _send(start_response, "text/html; charset=utf-8", body, "no-cache", vary=True, status="404 Not Found",
+                 environ=environ)
 
 
 def _plain(start_response, status: str, body: bytes):

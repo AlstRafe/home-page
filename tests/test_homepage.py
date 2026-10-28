@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import gzip
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -179,6 +180,68 @@ name = "Memo"
         self.assertNotEqual(changed["ETag"], headers["ETag"])
         self.assertIn(b"mission = 2", gzip.decompress(body))
         self.assertNotIn("Content-Encoding", call(self.portal, "/infra/", HTTP_ACCEPT_ENCODING="gzip")[1])  # small
+
+    def test_a_pages_scripts_are_kept_until_they_change(self):
+        script = self.game / "js" / "app.js"
+        (self.game / "index.html").write_text(
+            '<!doctype html><title>CoreLab</title><link rel="stylesheet" href="./css/app.css">'
+            '<link rel="icon" href="data:image/svg+xml,x"><script src="/elsewhere.js"></script>'
+            "<script src='js/app.js'></script><script src=\"./js/none.js\"></script><body></body>", encoding="utf-8")
+        status, headers, page = call(self.portal, "/infra/")
+        self.assertEqual((status, headers["Cache-Control"]), (200, "no-cache"))
+        address = re.search(r"js/app\.js\?v=(\w+)'", page)
+        self.assertIsNotNone(address, page)
+        self.assertIn('href="./css/app.css"', page)  # no such file: left as it is
+        self.assertIn('href="data:image/svg+xml,x"', page)
+        self.assertIn('src="/elsewhere.js"', page)
+        self.assertIn('src="./js/none.js"', page)
+        status, kept, _ = call(self.portal, f"/infra/js/app.js?v={address.group(1)}")
+        self.assertEqual((status, kept["Cache-Control"]), (200, "public, max-age=31536000, immutable"))
+        self.assertEqual(call(self.portal, "/infra/js/app.js?v=old")[1]["Cache-Control"], "no-cache")
+        self.assertEqual(call(self.portal, "/infra/js/app.js")[1]["Cache-Control"], "no-cache")
+        script.write_text("2;", encoding="utf-8")
+        later = time.time() + 5
+        os.utime(script, (later, later))
+        status, again, page = call(self.portal, "/infra/", HTTP_IF_NONE_MATCH=headers["ETag"])
+        self.assertEqual(status, 200)  # the page names the new version
+        self.assertNotEqual(again["ETag"], headers["ETag"])
+        self.assertNotIn(f"v={address.group(1)}", page)
+        self.assertEqual(call(self.portal, f"/infra/js/app.js?v={address.group(1)}")[1]["Cache-Control"], "no-cache")
+
+    def test_a_python_sites_preview_is_made_once_a_minute_in_the_background(self):
+        made = []
+        news_app = homepage.App("news", "/news", news, "NewsBridge",
+                                preview=lambda lang: made.append(lang) or {"items": [(f"story {len(made)}", "/a/1")]})
+        portal = homepage.build([news_app], config=self.config)
+        self.assertIn("story 1", call(portal, "/")[2])
+        self.assertIn("story 1", call(portal, "/")[2])
+        self.assertEqual(made, ["ja"])
+        site = next(item for item in portal.sites if item.mount == "/news")
+        site._kept["ja"] = (time.monotonic() - homepage.PREVIEW_SECONDS - 1, site._kept["ja"][1])
+        self.assertIn("story 1", call(portal, "/")[2])  # at once, the old one
+        for _ in range(100):
+            if site._kept["ja"][1]["items"][0][0] == "story 2":
+                break
+            time.sleep(0.02)
+        self.assertIn("story 2", call(portal, "/")[2])
+        portal.warm().join(5)
+        self.assertEqual(sorted(made), sorted(["ja", "ja", "ko", "en-GB", "zh-TW"]))
+
+    def test_the_index_is_sent_gzipped_and_the_folder_sites_date_skips_dot_folders(self):
+        status, headers, body = call(self.portal, "/", raw=True, HTTP_ACCEPT_ENCODING="gzip, deflate, br")
+        self.assertEqual((status, headers["Content-Encoding"]), (200, "gzip"))
+        self.assertIn(b"<h1>", gzip.decompress(body))
+        self.assertEqual(headers["Vary"], "Accept-Encoding, Cookie, Accept-Language")
+        self.assertNotIn("Content-Encoding", call(self.portal, "/")[1])
+        css = re.search(r'portal\.css\?v=(\w+)"', gzip.decompress(body).decode()).group(1)
+        self.assertEqual(call(self.portal, f"/portal.css?v={css}")[1]["Cache-Control"], "public, max-age=31536000, immutable")
+        old = time.time() - 86400 * 400
+        for file in self.game.rglob("*"):
+            os.utime(file, (old, old))
+        later = time.time() + 86400 * 30
+        os.utime(self.game / ".git" / "config", (later, later))
+        files = homepage.StaticFiles(self.game)
+        self.assertLess(files.newest().timestamp(), time.time() - 86400 * 300)
 
     def test_a_folder_site_shows_what_it_has_from_its_own_json(self):
         (self.game / "portal.json").write_text(
