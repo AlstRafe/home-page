@@ -15,6 +15,7 @@ Traditional Chinese); sites.toml's texts are Japanese, with ``[ko]``, ``[en-GB]`
 
 from __future__ import annotations
 
+import base64
 import gzip
 import hashlib
 import html
@@ -68,6 +69,24 @@ PREVIEW_SECONDS = 60.0
 IMMUTABLE = "public, max-age=31536000, immutable"
 #: Text answers from this size up are sent gzipped to browsers that take it.
 GZIP_MIN = 1024
+#: Light or dark: the device's setting until the visitor picks one with the button in the header
+#: (automatic -> light -> dark), the same choice News Site and CoreLab read (localStorage "theme": the
+#: sites share one origin). Inline in <head>, so the page is painted in it from the start; the CSP
+#: allows exactly this script, by its hash. Phone toolbars (theme-color) follow a forced choice too.
+THEME_SCRIPT = (
+    '(function(){var d=document,r=d.documentElement,o=["auto","light","dark"],c={light:"#f6f4ef",dark:"#161513"};'
+    'function get(){try{var t=localStorage.getItem("theme");return o.indexOf(t)>0?t:"auto"}'
+    'catch(e){return r.getAttribute("data-theme")||"auto"}}'
+    'function set(t){if(t==="auto")r.removeAttribute("data-theme");else r.setAttribute("data-theme",t);'
+    "d.querySelectorAll('meta[name=\"theme-color\"]').forEach(function(m){"
+    'm.content=c[t==="auto"?(m.media.indexOf("dark")<0?"light":"dark"):t]})}'
+    "set(get());"
+    'd.addEventListener("DOMContentLoaded",function(){var b=d.getElementById("theme");'
+    'if(b)b.addEventListener("click",function(){var t=o[(o.indexOf(get())+1)%3];'
+    'try{if(t==="auto")localStorage.removeItem("theme");else localStorage.setItem("theme",t)}catch(e){}set(t)})});'
+    'addEventListener("storage",function(e){if(e.key==="theme"||e.key===null)set(get())})})();'
+)
+THEME_HASH = "'sha256-" + base64.b64encode(hashlib.sha256(THEME_SCRIPT.encode()).digest()).decode() + "'"
 
 
 @dataclass
@@ -427,6 +446,8 @@ class Portal:
             "lang": lang,
             "locale": i18n.LOCALES[lang],
             "menu": i18n.menu(lang),
+            "theme": _theme_button(lang),
+            "theme_script": THEME_SCRIPT,
             "title": e(title),
             "description": e(lead or title),
             "url": e(f"{origin}{quote(home)}") if host else "",
@@ -855,6 +876,26 @@ def _setting(settings: dict, key: str, default: str) -> str:
     return value.strip() if isinstance(value, str) else default
 
 
+def _theme_button(lang: str) -> str:
+    """The header's light/dark button (THEME_SCRIPT makes it work): the words and icon of each
+    state are all here, and the stylesheet shows the current one (<html data-theme>), so the
+    page is right from its first paint."""
+    icons = {
+        "auto": '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/>',
+        "light": '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M4.6 4.6l1.8 1.8M17.6 17.6l1.8 1.8'
+        'M2.5 12H5M19 12h2.5M4.6 19.4l1.8-1.8M17.6 6.4l1.8-1.8"/>',
+        "dark": '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
+    }
+    states = {"auto": "自動", "light": "オフ", "dark": "オン"}
+    e = html.escape
+    spans = "".join(
+        f'<span class="t-{key}"><svg viewBox="0 0 24 24" aria-hidden="true">{icons[key]}</svg>'
+        f'<span class="words">{e(i18n.text(lang, "ダークモード {state}", state=i18n.text(lang, state)))}</span></span>'
+        for key, state in states.items()
+    )
+    return f'<button type="button" class="theme" id="theme" title="{e(i18n.text(lang, "ダークモード: 自動 → オフ → オン"))}">{spans}</button>'
+
+
 def _headers(content_type: str, length: int, cache: str) -> list[tuple[str, str]]:
     return [
         ("Content-Type", content_type),
@@ -862,7 +903,7 @@ def _headers(content_type: str, length: int, cache: str) -> list[tuple[str, str]
         ("Cache-Control", cache),
         (
             "Content-Security-Policy",
-            "default-src 'none'; style-src 'self'; img-src 'self'; "
+            f"default-src 'none'; script-src {THEME_HASH}; style-src 'self'; img-src 'self'; "
             "base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
         ),
         *SECURITY_HEADERS,
@@ -913,7 +954,7 @@ def _not_found(environ, start_response, site: str = ""):
     body = (
         f'<!doctype html><html lang="{lang}"><head><meta charset="utf-8">'
         f'<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">'
-        f'<title>{heading}</title><link rel="icon" href="{e(home)}favicon.svg" type="image/svg+xml">'
+        f'<title>{heading}</title><script>{THEME_SCRIPT}</script><link rel="icon" href="{e(home)}favicon.svg" type="image/svg+xml">'
         f'<link rel="stylesheet" href="{e(home)}portal.css"></head><body class="missing"><main>'
         f'<p class="date">{e(i18n.text(lang, "エラー {status}", status=404))}</p><h1>{heading}</h1>'
         f'<p class="lead">{e(i18n.text(lang, "アドレスが変わったか、なくなった可能性があります。"))}</p>'

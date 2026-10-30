@@ -496,6 +496,24 @@ name = "Gone"
         self.assertNotEqual(headers["ETag"], call(self.portal, "/memo/")[1]["ETag"])
         self.assertIn("Cookie", headers["Vary"])
 
+    def test_light_or_dark_is_chosen_with_the_button_and_shared_with_the_sites(self):
+        status, headers, page = call(self.portal, "/")
+        self.assertIn('<button type="button" class="theme" id="theme" title="ダークモード: 自動 → オフ → オン">', page)
+        for words in ("ダークモード 自動", "ダークモード オフ", "ダークモード オン"):
+            self.assertIn(f'<span class="words">{words}</span>', page)
+        # the script that applies and saves the choice (localStorage "theme", as News Site and CoreLab) runs
+        # in <head>, before the page is painted, and the CSP allows exactly it
+        self.assertLess(page.index(f"<script>{homepage.THEME_SCRIPT}</script>"), page.index("<body>"))
+        self.assertIn('localStorage.getItem("theme")', homepage.THEME_SCRIPT)
+        self.assertIn(f"script-src {homepage.THEME_HASH};", headers["Content-Security-Policy"])
+        korean = call(self.portal, "/", HTTP_COOKIE="lang=ko")[2]
+        self.assertIn('title="다크 모드: 자동 → 끔 → 켬"', korean)
+        self.assertIn('<span class="words">다크 모드 켬</span>', korean)
+        english = call(self.portal, "/", HTTP_COOKIE="lang=en-GB")[2]
+        self.assertIn('<span class="words">Dark mode: auto</span>', english)
+        missing = call(self.portal, "/infra/nothing.html", HTTP_ACCEPT="text/html")[2]
+        self.assertIn(f"<script>{homepage.THEME_SCRIPT}</script>", missing)  # a 404 is in the chosen theme too
+
     def test_a_missing_page_shows_the_way_back_to_browsers(self):
         status, headers, page = call(
             self.portal, "/infra/nothing.html", HTTP_ACCEPT="text/html,*/*", HTTP_COOKIE="lang=ko"
