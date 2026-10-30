@@ -12,5 +12,6 @@ WorkingDirectory=/srv/sites/News Site/work/app
 Environment=PYTHONUNBUFFERED=1 PYTHONIOENCODING=utf-8
 Environment=PYTHON_KEYRING_BACKEND=keyrings.alt.file.PlaintextKeyring
 ExecStart=/srv/sites/venv/bin/python collector.py --once
-Nice=10
+# Lowest priority: on the 1/8-OCPU VM every CPU-second the collector takes is one the sites wait for.
+Nice=19
 TimeoutStartSec=50min

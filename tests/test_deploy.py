@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "deploy"))
 import backup
 import import_news_data
+import keepalive
 import migrate
 
 PC_ARTICLES = r"C:\Users\someone\Documents\Claude\News Site\work\app\articles"
@@ -126,6 +127,18 @@ class BackupTest(unittest.TestCase):
             db = sqlite3.connect(Path(folder) / "instance" / "library.sqlite3")
             self.assertEqual(db.execute("SELECT title FROM articles").fetchall(), [("kept",)])
             db.close()
+
+
+
+class KeepaliveTest(unittest.TestCase):
+    def test_the_busy_loop_steps_aside_whenever_anything_else_wants_a_cpu(self):
+        loads = iter(["0.10 0.20 0.30 3/180 4242\n"] * 3 + ["0.10 0.20 0.30 1/180 4242\n"] * 1000)
+        with mock.patch("builtins.open", side_effect=lambda *a, **k: __import__("io").StringIO(next(loads))), \
+                mock.patch.object(keepalive, "YIELD", 0.01), mock.patch.object(keepalive.time, "sleep") as slept:
+            keepalive.busy(0.05)
+        self.assertEqual(slept.call_count, 3)  # once for each look that found the sites busy
+        with mock.patch("builtins.open", side_effect=OSError):
+            self.assertFalse(keepalive.others_running())  # no /proc (not Linux): just work
 
 
 if __name__ == "__main__":
