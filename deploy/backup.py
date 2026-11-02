@@ -6,6 +6,7 @@ The databases are copied through SQLite's backup (consistent even while the site
 the newest KEEP copies (default 14) stay. The saved articles are not in it (they are big, and the
 collector keeps adding to them); the boot volume they are on stays with the VM.
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -26,8 +27,7 @@ def main(argv: list[str]) -> int:
     keep = int(argv[2]) if len(argv) == 3 else 14
     folder.mkdir(parents=True, exist_ok=True)
     target = folder / f"news-instance-{datetime.now():%Y%m%d-%H%M%S}.tar.gz"
-    with tempfile.TemporaryDirectory(dir=folder) as temporary, \
-            tarfile.open(target.with_suffix(".part"), "w:gz") as tar:
+    with tempfile.TemporaryDirectory(dir=folder) as temporary, tarfile.open(target.with_suffix(".part"), "w:gz") as tar:
         for path in sorted(instance.iterdir()):
             if not path.is_file() or path.name in SKIP or path.name.endswith(("-wal", "-shm", "-journal")):
                 continue

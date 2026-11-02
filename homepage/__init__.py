@@ -12,6 +12,7 @@ Every page is shown in the visitor's language (homepage.i18n: Japanese, Korean, 
 Traditional Chinese); sites.toml's texts are Japanese, with ``[ko]``, ``[en-GB]``, ``[zh-TW]`` tables
 (and ``[site.ko]`` ... under a ``[[site]]``) for the other languages.
 """
+
 from __future__ import annotations
 
 import gzip
@@ -63,6 +64,7 @@ class App:
     the portal: unknown GET paths are redirected under its mount, paths starting with one of these
     prefixes (and requests that are not GET/HEAD) go to it unchanged. ``version()``: what the
     site's code is now; the server restarts into new code when it changes."""
+
     key: str
     mount: str
     app: object
@@ -78,6 +80,7 @@ class App:
 @dataclass
 class Site:
     """One entry of the list, as sites.toml (and the server's App) define it."""
+
     mount: str
     name: str
     app: object
@@ -101,8 +104,13 @@ class Site:
 
     def say(self, lang: str, key: str):
         """This site's ``key`` in ``lang``: sites.toml's translation, else its Japanese."""
-        default = {"name": self.name, "subtitle": self.subtitle, "description": self.description,
-                   "tags": self.tags, "open": self.open_label}[key]
+        default = {
+            "name": self.name,
+            "subtitle": self.subtitle,
+            "description": self.description,
+            "tags": self.tags,
+            "open": self.open_label,
+        }[key]
         return self.texts.get(lang, {}).get(key, default)
 
     def now(self, lang: str = i18n.DEFAULT) -> dict:
@@ -123,7 +131,9 @@ class Site:
                 start = lang not in self._making
                 self._making.add(lang)
             if start:
-                threading.Thread(target=self._make, args=(lang,), name=f"preview {self.mount} {lang}", daemon=True).start()
+                threading.Thread(
+                    target=self._make, args=(lang,), name=f"preview {self.mount} {lang}", daemon=True
+                ).start()
         return kept[1]
 
     def _make(self, lang: str) -> dict:
@@ -181,7 +191,10 @@ class Portal:
             try:
                 data = tomllib.loads(self.config.read_text(encoding="utf-8")) if stamp else {}
             except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
-                self.problems = [*self.notes, f"sites.toml を読めませんでした（{exc}）。直すまでは前の内容で表示しています。"]
+                self.problems = [
+                    *self.notes,
+                    f"sites.toml を読めませんでした（{exc}）。直すまでは前の内容で表示しています。",
+                ]
                 if first:
                     self.settings, self.sites = {}, self._sites({})[0]
                 return
@@ -199,11 +212,13 @@ class Portal:
     def warm(self) -> threading.Thread:
         """Makes the Python sites' previews in every language in the background, so that the first
         visitors after the server starts do not wait for them."""
+
         def run() -> None:
             for site in list(self.sites):
                 if site.keep:
                     for lang in i18n.LANGS:
                         site.now(lang)
+
         thread = threading.Thread(target=run, name="preview warm-up", daemon=True)
         thread.start()
         return thread
@@ -231,8 +246,17 @@ class Portal:
         for item in self.apps.values():  # an app sites.toml does not mention is still served (and listed)
             if item.mount not in used:
                 used.add(item.mount)
-                sites.append(Site(item.mount, item.name, item.app, item.subtitle, item.description,
-                                  preview=item.preview, keep=PREVIEW_SECONDS))
+                sites.append(
+                    Site(
+                        item.mount,
+                        item.name,
+                        item.app,
+                        item.subtitle,
+                        item.description,
+                        preview=item.preview,
+                        keep=PREVIEW_SECONDS,
+                    )
+                )
         return sites, problems
 
     def _site(self, entry) -> Site | None:
@@ -246,15 +270,30 @@ class Portal:
             raise ValueError("icon は icons フォルダのファイル名（拡張子なし）です。")
         tags = entry.get("tags", [])
         if not isinstance(tags, list) or not all(isinstance(tag, str) for tag in tags):
-            raise ValueError("tags は文字列の並び（[\"…\", \"…\"]）です。")
-        common = dict(icon=text["icon"], accent=accent, tags=tuple(tags), open_label=text["open"],
-                      listed=_flag(entry, "listed"), public=_flag(entry, "public"), texts=_translations(entry, SITE_TEXTS))
+            raise ValueError('tags は文字列の並び（["…", "…"]）です。')
+        common = dict(
+            icon=text["icon"],
+            accent=accent,
+            tags=tuple(tags),
+            open_label=text["open"],
+            listed=_flag(entry, "listed"),
+            public=_flag(entry, "public"),
+            texts=_translations(entry, SITE_TEXTS),
+        )
         if "app" in entry or "python" in entry:
             item = self.apps.get(_text(entry, "app") or _text(entry, "mount"))
             if item is None:  # not loaded (the server's note says why) or not provided (python -m homepage)
                 return None
-            return Site(item.mount, text["name"] or item.name, item.app, text["subtitle"] or item.subtitle,
-                        text["description"] or item.description, preview=item.preview, keep=PREVIEW_SECONDS, **common)
+            return Site(
+                item.mount,
+                text["name"] or item.name,
+                item.app,
+                text["subtitle"] or item.subtitle,
+                text["description"] or item.description,
+                preview=item.preview,
+                keep=PREVIEW_SECONDS,
+                **common,
+            )
         mount, folder = _text(entry, "mount"), _text(entry, "folder")
         if not MOUNT.fullmatch(mount):
             raise ValueError("mount は /infra のような、/ と英小文字・数字・ハイフンの名前です。")
@@ -271,11 +310,12 @@ class Portal:
         if text["preview"]:
             file = (root / text["preview"]).resolve()
             if file.suffix.lower() != ".json" or not file.is_relative_to(root):
-                raise ValueError("preview はそのフォルダの中の .json ファイルです（例: \"portal.json\"）。")
+                raise ValueError('preview はそのフォルダの中の .json ファイルです（例: "portal.json"）。')
             preview = lambda lang: _preview_file(file, lang)  # noqa: E731
         files = StaticFiles(root, self.allowed_hosts, home_link=_text(entry, "home_link") != "own")
-        return Site(mount, text["name"], files, text["subtitle"], text["description"], files=files,
-                    preview=preview, **common)
+        return Site(
+            mount, text["name"], files, text["subtitle"], text["description"], files=files, preview=preview, **common
+        )
 
     # -- requests -----------------------------------------------------------------------------
 
@@ -286,8 +326,12 @@ class Portal:
         visitor = self._visitor(environ)
         asked = i18n.asked(environ)
         if asked:  # ?lang=ko on any address: remembered for every site, and the same address without it
-            return _redirect(start_response, environ.get("SCRIPT_NAME", "") + path, dict(environ, QUERY_STRING=asked[1]),
-                             headers=[i18n.set_cookie(asked[0], environ.get("wsgi.url_scheme") == "https")])
+            return _redirect(
+                start_response,
+                environ.get("SCRIPT_NAME", "") + path,
+                dict(environ, QUERY_STRING=asked[1]),
+                headers=[i18n.set_cookie(asked[0], environ.get("wsgi.url_scheme") == "https")],
+            )
         for site in self.sites:
             if path == site.mount or path.startswith(site.mount + "/"):
                 if visitor and not site.public:
@@ -295,8 +339,12 @@ class Portal:
                 if path == site.mount:
                     return _redirect(start_response, environ.get("SCRIPT_NAME", "") + site.mount + "/", environ)
                 outer = environ.get("SCRIPT_NAME", "")
-                environ = dict(environ, SCRIPT_NAME=outer + site.mount, PATH_INFO=path[len(site.mount):],
-                               **{"homepage.home": outer + "/", "homepage.site": site.say(i18n.chosen(environ), "name")})
+                environ = dict(
+                    environ,
+                    SCRIPT_NAME=outer + site.mount,
+                    PATH_INFO=path[len(site.mount) :],
+                    **{"homepage.home": outer + "/", "homepage.site": site.say(i18n.chosen(environ), "name")},
+                )
                 return site.app(environ, start_response)
         if path in OWN:
             if self.allowed_hosts is not None and not self.allowed_hosts(environ.get("HTTP_HOST", "")):
@@ -305,12 +353,19 @@ class Portal:
                 return _plain(start_response, "405 Method Not Allowed", b"Method Not Allowed")
             if path == "/portal.css":  # the index asks for it at its version (?v=)
                 current = environ.get("QUERY_STRING", "") == f"v={_version(PACKAGE / 'portal.css')}"
-                return _send(start_response, "text/css; charset=utf-8", _read(PACKAGE / "portal.css"),
-                             IMMUTABLE if current else "public, max-age=86400", environ=environ)
+                return _send(
+                    start_response,
+                    "text/css; charset=utf-8",
+                    _read(PACKAGE / "portal.css"),
+                    IMMUTABLE if current else "public, max-age=86400",
+                    environ=environ,
+                )
             if path == "/favicon.svg":
                 return _send(start_response, "image/svg+xml", _read(PACKAGE / "favicon.svg"), "public, max-age=86400")
             if path == "/robots.txt":
-                return _send(start_response, "text/plain; charset=utf-8", self.robots().encode(), "public, max-age=86400")
+                return _send(
+                    start_response, "text/plain; charset=utf-8", self.robots().encode(), "public, max-age=86400"
+                )
             body = self.index(environ, visitor).encode("utf-8")
             return _send(start_response, "text/html; charset=utf-8", body, "no-cache", vary=True, environ=environ)
         legacy = next((item for item in self.apps.values() if item.legacy is not None), None)
@@ -371,25 +426,44 @@ class Portal:
         name, subtitle, description = site.say(lang, "name"), site.say(lang, "subtitle"), site.say(lang, "description")
         sub = f'<p class="sub">{e(subtitle)}</p>' if subtitle else ""
         description = f'<p class="desc">{e(description)}</p>' if description else ""
-        chips = list(site.say(lang, "tags")) + ([] if site.public or visitor else [i18n.text(lang, "非公開（このPCからだけ）")])
-        tags = (f'<ul class="tags" aria-label="{e(i18n.text(lang, "特徴"))}">' + "".join(f"<li>{e(t)}</li>" for t in chips)
-                + "</ul>") if chips else ""
+        chips = list(site.say(lang, "tags")) + (
+            [] if site.public or visitor else [i18n.text(lang, "非公開（このPCからだけ）")]
+        )
+        tags = (
+            (
+                f'<ul class="tags" aria-label="{e(i18n.text(lang, "特徴"))}">'
+                + "".join(f"<li>{e(t)}</li>" for t in chips)
+                + "</ul>"
+            )
+            if chips
+            else ""
+        )
         now = site.now(lang)
-        items = "".join(f'<li><a href="{e(site.mount + path)}">{e(text)}</a></li>' for text, path in now.get("items", []))
+        items = "".join(
+            f'<li><a href="{e(site.mount + path)}">{e(text)}</a></li>' for text, path in now.get("items", [])
+        )
         note = now.get("note", "")
         updated = site.updated()
         if not note and updated:
             note = i18n.updated(lang, updated)
         heading = now.get("title") or i18n.text(lang, "新着")
-        preview = (f'<div class="now"><p class="now-head">{e(heading)}'
-                   f'{f"<span>{e(note)}</span>" if note else ""}</p><ul>{items}</ul></div>') if items else ""
+        preview = (
+            (
+                f'<div class="now"><p class="now-head">{e(heading)}'
+                f"{f'<span>{e(note)}</span>' if note else ''}</p><ul>{items}</ul></div>"
+            )
+            if items
+            else ""
+        )
         status = f'<span class="status">{e(note)}</span>' if note and not items else ""
         label = site.say(lang, "open") or i18n.text(lang, "{name} を開く", name=name)
-        return (f'<li class="site accent-{site.accent}">\n<div class="site-head">{self._icon(site)}'
-                f'<div class="site-name"><h2><a href="{href}">{e(name)}</a></h2>{sub}</div>'
-                f'<span class="no" aria-hidden="true">{number:02d}</span></div>\n'
-                f'{description}{tags}{preview}\n'
-                f'<p class="go"><a class="open" href="{href}">{e(label)}<span class="arrow" aria-hidden="true">→</span></a>{status}</p>\n</li>')
+        return (
+            f'<li class="site accent-{site.accent}">\n<div class="site-head">{self._icon(site)}'
+            f'<div class="site-name"><h2><a href="{href}">{e(name)}</a></h2>{sub}</div>'
+            f'<span class="no" aria-hidden="true">{number:02d}</span></div>\n'
+            f"{description}{tags}{preview}\n"
+            f'<p class="go"><a class="open" href="{href}">{e(label)}<span class="arrow" aria-hidden="true">→</span></a>{status}</p>\n</li>'
+        )
 
     @staticmethod
     def _icon(site: Site) -> str:
@@ -402,9 +476,11 @@ class Portal:
         e = html.escape
         problems = "".join(f"<li>{e(p)}</li>" for p in self.problems)
         problems = f'<ul class="problems" role="status">{problems}</ul>' if problems else ""
-        return (f'<div class="owner"><h2>このPCの持ち主向け</h2>{problems}'
-                f'<p>サイトを足すには <code>{e(str(self.config))}</code> に <code>[[site]]</code> を1つ書き足して、'
-                f'このページを再読み込みします（再起動は要りません）。この欄はテスト公開の名前では表示されません。</p></div>')
+        return (
+            f'<div class="owner"><h2>このPCの持ち主向け</h2>{problems}'
+            f"<p>サイトを足すには <code>{e(str(self.config))}</code> に <code>[[site]]</code> を1つ書き足して、"
+            f"このページを再読み込みします（再起動は要りません）。この欄はテスト公開の名前では表示されません。</p></div>"
+        )
 
 
 class StaticFiles:
@@ -419,24 +495,43 @@ class StaticFiles:
     page alone, not again for each of a game's dozens of scripts (each a trip over the Funnel to a
     small server). A changed file gets a new version in the page, so it is fetched at once."""
 
-    TYPES = {".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",
-             ".js": "text/javascript; charset=utf-8", ".json": "application/json", ".svg": "image/svg+xml",
-             ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
-             ".webp": "image/webp", ".ico": "image/x-icon", ".woff2": "font/woff2",
-             ".mp3": "audio/mpeg", ".mp4": "video/mp4", ".webm": "video/webm", ".wasm": "application/wasm"}
+    TYPES = {
+        ".html": "text/html; charset=utf-8",
+        ".css": "text/css; charset=utf-8",
+        ".js": "text/javascript; charset=utf-8",
+        ".json": "application/json",
+        ".svg": "image/svg+xml",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".gif": "image/gif",
+        ".webp": "image/webp",
+        ".ico": "image/x-icon",
+        ".woff2": "font/woff2",
+        ".mp3": "audio/mpeg",
+        ".mp4": "video/mp4",
+        ".webm": "video/webm",
+        ".wasm": "application/wasm",
+    }
     #: The site's own files only; inline style attributes and data: images are allowed, nothing is fetched elsewhere.
-    CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
-           "connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
-    HOME_LINK = ('<a href="{home}" title="{title}" style="position:fixed;left:12px;bottom:12px;z-index:2147483647;'
-                 'display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 14px;border-radius:18px;'
-                 'background:rgba(28,27,25,.9);color:#fff;font:600 13px/1 system-ui,sans-serif;text-decoration:none;'
-                 'box-shadow:0 2px 8px rgba(0,0,0,.3)"><span aria-hidden="true">←</span>{label}</a>')
+    CSP = (
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+        "connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    )
+    HOME_LINK = (
+        '<a href="{home}" title="{title}" style="position:fixed;left:12px;bottom:12px;z-index:2147483647;'
+        "display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 14px;border-radius:18px;"
+        "background:rgba(28,27,25,.9);color:#fff;font:600 13px/1 system-ui,sans-serif;text-decoration:none;"
+        'box-shadow:0 2px 8px rgba(0,0,0,.3)"><span aria-hidden="true">←</span>{label}</a>'
+    )
     #: Files looked at for the "更新" date, and how long the date is kept.
     NEWEST_FILES, NEWEST_SECONDS = 2000, 60.0
     #: Types sent gzipped (the rest are compressed already), from this size up.
     GZIP_TYPES = (".html", ".css", ".js", ".json", ".svg", ".wasm")
     #: A page's own scripts and styles: ``<script src="...">`` and ``<link href="...">`` with a relative address.
-    ASSET = re.compile(rb"""(<(?:script|link)\b[^>]*?\b(?:src|href)\s*=\s*)(["'])([^"'?#:<>\s/][^"'?#:<>\s]*)\2""", re.I)
+    ASSET = re.compile(
+        rb"""(<(?:script|link)\b[^>]*?\b(?:src|href)\s*=\s*)(["'])([^"'?#:<>\s/][^"'?#:<>\s]*)\2""", re.I
+    )
 
     def __init__(self, root: Path, allowed_hosts=None, home_link: bool = True):
         self.root = Path(root).resolve()
@@ -466,14 +561,23 @@ class StaticFiles:
         home = environ.get("homepage.home", "/") if self.home_link and is_page else ""
         if home:  # the way back is in the visitor's language
             home = f"{home}\n{i18n.chosen(environ)}"
-        packed = (file.suffix.lower() in self.GZIP_TYPES and stamp[1] >= GZIP_MIN
-                  and "gzip" in environ.get("HTTP_ACCEPT_ENCODING", "").lower())
+        packed = (
+            file.suffix.lower() in self.GZIP_TYPES
+            and stamp[1] >= GZIP_MIN
+            and "gzip" in environ.get("HTTP_ACCEPT_ENCODING", "").lower()
+        )
         tag = '"' + hashlib.sha1(f"{stamp}{home}{versions}".encode()).hexdigest()[:16] + ('-gz"' if packed else '"')
         current = not is_page and environ.get("QUERY_STRING", "") == f"v={_short(stamp)}"
-        headers = [("Content-Type", kind), ("Cache-Control", IMMUTABLE if current else "no-cache"), ("ETag", tag),
-                   ("Last-Modified", _http_date(stamp[0])), ("Vary", "Accept-Encoding"),
-                   ("Content-Security-Policy", self.CSP), ("X-Content-Type-Options", "nosniff"),
-                   ("Referrer-Policy", "same-origin")]
+        headers = [
+            ("Content-Type", kind),
+            ("Cache-Control", IMMUTABLE if current else "no-cache"),
+            ("ETag", tag),
+            ("Last-Modified", _http_date(stamp[0])),
+            ("Vary", "Accept-Encoding"),
+            ("Content-Security-Policy", self.CSP),
+            ("X-Content-Type-Options", "nosniff"),
+            ("Referrer-Policy", "same-origin"),
+        ]
         if home:
             headers[4] = ("Vary", "Accept-Encoding, Cookie, Accept-Language")
         if tag in environ.get("HTTP_IF_NONE_MATCH", ""):
@@ -490,10 +594,13 @@ class StaticFiles:
         file = self.root.joinpath(*parts).resolve()
         # The resolved path is checked too: on Windows a short name (CLAUDE~1) or a link reaches a
         # dot folder that the address never names.
-        if (any(part.startswith(".") or "\\" in part or ":" in part or "~" in part for part in parts)
-                or not file.is_relative_to(self.root)
-                or any(part.startswith(".") for part in file.relative_to(self.root).parts)
-                or file.suffix.lower() not in self.TYPES or not file.is_file()):
+        if (
+            any(part.startswith(".") or "\\" in part or ":" in part or "~" in part for part in parts)
+            or not file.is_relative_to(self.root)
+            or any(part.startswith(".") for part in file.relative_to(self.root).parts)
+            or file.suffix.lower() not in self.TYPES
+            or not file.is_file()
+        ):
             return None
         return file
 
@@ -536,8 +643,11 @@ class StaticFiles:
 
     def _with_home_link(self, body: bytes, home: str) -> bytes:
         home, _, lang = home.partition("\n")
-        link = self.HOME_LINK.format(home=html.escape(home), title=html.escape(i18n.text(lang, "サイト一覧へ戻る")),
-                                     label=html.escape(i18n.text(lang, "サイト一覧"))).encode("utf-8")
+        link = self.HOME_LINK.format(
+            home=html.escape(home),
+            title=html.escape(i18n.text(lang, "サイト一覧へ戻る")),
+            label=html.escape(i18n.text(lang, "サイト一覧")),
+        ).encode("utf-8")
         at = body.lower().rfind(b"</body>")
         return body[:at] + link + body[at:] if at >= 0 else body + link
 
@@ -601,6 +711,7 @@ def _read(path: Path) -> bytes:
 
 def _http_date(mtime_ns: int) -> str:
     from email.utils import formatdate
+
     return formatdate(mtime_ns / 1_000_000_000, usegmt=True)
 
 
@@ -614,6 +725,7 @@ def _preview_file(file: Path, lang: str = i18n.DEFAULT) -> dict:
         if isinstance(value, dict):
             value = value.get(lang, value.get(i18n.DEFAULT, ""))
         return value if isinstance(value, str) else None
+
     items = [(say(text), path) for text, path in data.get("items", [])]
     items = [(text, path) for text, path in items if text and isinstance(path, str) and path.startswith("/")]
     return {"title": say(data.get("title", "")) or "", "note": say(data.get("note", "")) or "", "items": items[:5]}
@@ -627,7 +739,7 @@ def _translations(entry: dict, keys: tuple) -> dict:
         if table is None:
             continue
         if not isinstance(table, dict):
-            raise ValueError(f"[{lang}] は表（[{lang}] の下に key = \"…\"）です。")
+            raise ValueError(f'[{lang}] は表（[{lang}] の下に key = "…"）です。')
         texts = {}
         for key in keys:
             if key not in table:
@@ -635,10 +747,10 @@ def _translations(entry: dict, keys: tuple) -> dict:
             value = table[key]
             if key in ("tags", "points"):
                 if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
-                    raise ValueError(f"[{lang}] の {key} は文字列の並び（[\"…\", \"…\"]）です。")
+                    raise ValueError(f'[{lang}] の {key} は文字列の並び（["…", "…"]）です。')
                 value = tuple(value) if key == "tags" else value
             elif not isinstance(value, str):
-                raise ValueError(f"[{lang}] の {key} は文字列（\"…\"）です。")
+                raise ValueError(f'[{lang}] の {key} は文字列（"…"）です。')
             texts[key] = value
         found[lang] = texts
     return found
@@ -646,8 +758,10 @@ def _translations(entry: dict, keys: tuple) -> dict:
 
 def _takes_an_argument(function) -> bool:
     try:
-        return any(p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD, p.VAR_POSITIONAL)
-                   for p in inspect.signature(function).parameters.values())
+        return any(
+            p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD, p.VAR_POSITIONAL)
+            for p in inspect.signature(function).parameters.values()
+        )
     except (TypeError, ValueError):
         return False
 
@@ -670,7 +784,7 @@ def _icon_svg(name: str) -> str:
 def _text(entry: dict, key: str) -> str:
     value = entry.get(key, "")
     if not isinstance(value, str):
-        raise ValueError(f"{key} は文字列（\"…\"）です。")
+        raise ValueError(f'{key} は文字列（"…"）です。')
     return value.strip()
 
 
@@ -687,14 +801,23 @@ def _setting(settings: dict, key: str, default: str) -> str:
 
 
 def _headers(content_type: str, length: int, cache: str) -> list[tuple[str, str]]:
-    return [("Content-Type", content_type), ("Content-Length", str(length)), ("Cache-Control", cache),
-            ("Content-Security-Policy", "default-src 'none'; style-src 'self'; img-src 'self'; "
-                                        "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"),
-            ("X-Content-Type-Options", "nosniff"), ("Referrer-Policy", "same-origin")]
+    return [
+        ("Content-Type", content_type),
+        ("Content-Length", str(length)),
+        ("Cache-Control", cache),
+        (
+            "Content-Security-Policy",
+            "default-src 'none'; style-src 'self'; img-src 'self'; "
+            "base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+        ),
+        ("X-Content-Type-Options", "nosniff"),
+        ("Referrer-Policy", "same-origin"),
+    ]
 
 
-def _send(start_response, content_type: str, body: bytes, cache: str, vary: bool = False, status: str = "200 OK",
-          environ=None):
+def _send(
+    start_response, content_type: str, body: bytes, cache: str, vary: bool = False, status: str = "200 OK", environ=None
+):
     """``vary``: the page is in the visitor's language. ``environ``: gzipped when the browser takes it
     (a page that fits the first packets of a new connection arrives a round trip sooner)."""
     packed = environ is not None and len(body) >= GZIP_MIN and "gzip" in environ.get("HTTP_ACCEPT_ENCODING", "").lower()
@@ -704,8 +827,17 @@ def _send(start_response, content_type: str, body: bytes, cache: str, vary: bool
     if packed:
         headers.append(("Content-Encoding", "gzip"))
     if vary or environ is not None:
-        headers.append(("Vary", ", ".join([*(["Accept-Encoding"] if environ is not None else []),
-                                            *(["Cookie", "Accept-Language"] if vary else [])])))
+        headers.append(
+            (
+                "Vary",
+                ", ".join(
+                    [
+                        *(["Accept-Encoding"] if environ is not None else []),
+                        *(["Cookie", "Accept-Language"] if vary else []),
+                    ]
+                ),
+            )
+        )
     start_response(status, headers)
     return [body]
 
@@ -719,29 +851,42 @@ def _not_found(environ, start_response, site: str = ""):
     home = environ.get("homepage.home", environ.get("SCRIPT_NAME", "") + "/")
     links = f'<a class="open" href="{e(home)}"><span class="arrow-back" aria-hidden="true">←</span>{e(i18n.text(lang, "サイト一覧"))}</a>'
     if site:
-        links = (f'<a class="open" href="{e(environ.get("SCRIPT_NAME", "") + "/")}">{e(i18n.text(lang, "{name} のトップへ", name=site))}</a>'
-                 + links.replace('class="open"', 'class="back"'))
+        links = (
+            f'<a class="open" href="{e(environ.get("SCRIPT_NAME", "") + "/")}">{e(i18n.text(lang, "{name} のトップへ", name=site))}</a>'
+            + links.replace('class="open"', 'class="back"')
+        )
     heading = e(i18n.text(lang, "ページが見つかりません"))
-    body = (f'<!doctype html><html lang="{lang}"><head><meta charset="utf-8">'
-            f'<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">'
-            f'<title>{heading}</title><link rel="icon" href="{e(home)}favicon.svg" type="image/svg+xml">'
-            f'<link rel="stylesheet" href="{e(home)}portal.css"></head><body class="missing"><main>'
-            f'<p class="date">{e(i18n.text(lang, "エラー {status}", status=404))}</p><h1>{heading}</h1>'
-            f'<p class="lead">{e(i18n.text(lang, "アドレスが変わったか、なくなった可能性があります。"))}</p>'
-            f'<p class="go">{links}</p></main></body></html>').encode()
-    return _send(start_response, "text/html; charset=utf-8", body, "no-cache", vary=True, status="404 Not Found",
-                 environ=environ)
+    body = (
+        f'<!doctype html><html lang="{lang}"><head><meta charset="utf-8">'
+        f'<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">'
+        f'<title>{heading}</title><link rel="icon" href="{e(home)}favicon.svg" type="image/svg+xml">'
+        f'<link rel="stylesheet" href="{e(home)}portal.css"></head><body class="missing"><main>'
+        f'<p class="date">{e(i18n.text(lang, "エラー {status}", status=404))}</p><h1>{heading}</h1>'
+        f'<p class="lead">{e(i18n.text(lang, "アドレスが変わったか、なくなった可能性があります。"))}</p>'
+        f'<p class="go">{links}</p></main></body></html>'
+    ).encode()
+    return _send(
+        start_response, "text/html; charset=utf-8", body, "no-cache", vary=True, status="404 Not Found", environ=environ
+    )
 
 
 def _plain(start_response, status: str, body: bytes):
-    start_response(status, [("Content-Type", "text/plain; charset=utf-8"), ("Content-Length", str(len(body))),
-                            ("X-Content-Type-Options", "nosniff")])
+    start_response(
+        status,
+        [
+            ("Content-Type", "text/plain; charset=utf-8"),
+            ("Content-Length", str(len(body))),
+            ("X-Content-Type-Options", "nosniff"),
+        ],
+    )
     return [body]
 
 
 def _redirect(start_response, target: str, environ, permanent: bool = False, headers=()):
     query = environ.get("QUERY_STRING", "")
     location = quote(target, safe="/%:@!$&'()*+,;=-._~") + (f"?{query}" if query else "")
-    start_response("308 Permanent Redirect" if permanent else "302 Found",
-                   [("Location", location), ("Content-Length", "0"), *headers])
+    start_response(
+        "308 Permanent Redirect" if permanent else "302 Found",
+        [("Location", location), ("Content-Length", "0"), *headers],
+    )
     return [b""]

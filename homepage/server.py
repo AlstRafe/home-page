@@ -15,6 +15,7 @@ answering the requests in flight) when what it loaded changed: the Home Page cod
 settings or the Python sites in sites.toml, a Python site's version (News Site writes its VERSION file
 when it is deployed), or a network address that came up after the start.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -69,10 +70,15 @@ def read_settings(config: Path = CONFIG) -> Settings:
     if listen not in ("network", "local"):
         print('[server] listen は "network" か "local" です。"network" で起動します。', flush=True)
         listen = "network"
-    hosts = tuple(item.strip().lower().rstrip(".") for item in hosts if isinstance(item, str) and item.strip()) \
-        if isinstance(hosts, list) else ()
+    hosts = (
+        tuple(item.strip().lower().rstrip(".") for item in hosts if isinstance(item, str) and item.strip())
+        if isinstance(hosts, list)
+        else ()
+    )
     sites = data.get("site", [])
-    python_sites = [entry for entry in sites if isinstance(entry, dict) and "python" in entry] if isinstance(sites, list) else []
+    python_sites = (
+        [entry for entry in sites if isinstance(entry, dict) and "python" in entry] if isinstance(sites, list) else []
+    )
     return Settings(port, listen, hosts, python_sites)
 
 
@@ -84,33 +90,54 @@ def settings_stamp(config: Path = CONFIG) -> str | None:
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
         return None
     sites = data.get("site") if isinstance(data.get("site"), list) else []
-    picked = [data.get("server"), [[entry.get(key) for key in ("mount", "python", "entry")]
-                                   for entry in sites if isinstance(entry, dict) and "python" in entry]]
+    picked = [
+        data.get("server"),
+        [
+            [entry.get(key) for key in ("mount", "python", "entry")]
+            for entry in sites
+            if isinstance(entry, dict) and "python" in entry
+        ],
+    ]
     return hashlib.sha256(json.dumps(picked, default=str, sort_keys=True).encode()).hexdigest()
 
 
 def code_stamp(package: Path = PACKAGE) -> tuple:
     """The Home Page code as it is now: its files' names, times and sizes."""
     try:
-        return tuple(sorted((str(file.relative_to(package)), file.stat().st_mtime_ns, file.stat().st_size)
-                            for file in package.rglob("*.py") if "__pycache__" not in file.parts))
+        return tuple(
+            sorted(
+                (str(file.relative_to(package)), file.stat().st_mtime_ns, file.stat().st_size)
+                for file in package.rglob("*.py")
+                if "__pycache__" not in file.parts
+            )
+        )
     except OSError:
         return ()
 
 
 # -- this PC's addresses and names ------------------------------------------------------------------
 
+
 def tailscale() -> tuple[str | None, str | None]:
     """This PC's Tailscale IPv4 address and name (``haruxera.tail1234.ts.net``) right now, or None."""
     program_files = os.environ.get("ProgramFiles", r"C:\Program Files")
-    candidates = [shutil.which("tailscale.exe"), shutil.which("tailscale"),
-                  os.path.join(program_files, "Tailscale", "tailscale.exe")]
+    candidates = [
+        shutil.which("tailscale.exe"),
+        shutil.which("tailscale"),
+        os.path.join(program_files, "Tailscale", "tailscale.exe"),
+    ]
     executable = next((item for item in candidates if item and os.path.isfile(item)), None)
     if executable:
         extra = {"creationflags": 0x08000000} if os.name == "nt" else {}  # CREATE_NO_WINDOW
         try:
-            status = json.loads(subprocess.run([executable, "status", "--json"], capture_output=True, text=True,
-                                               timeout=4, check=True, **extra).stdout).get("Self") or {}
+            status = (
+                json.loads(
+                    subprocess.run(
+                        [executable, "status", "--json"], capture_output=True, text=True, timeout=4, check=True, **extra
+                    ).stdout
+                ).get("Self")
+                or {}
+            )
             address = next((item for item in status.get("TailscaleIPs") or [] if _tailscale_ip(item)), None)
             if address:
                 return address, (str(status.get("DNSName") or "").rstrip(".").lower() or None)
@@ -158,7 +185,7 @@ def host_without_port(raw: str) -> str:
     """``example:5000`` -> ``example``; ``[::1]:5000`` and ``[::1]`` -> ``::1``."""
     raw = raw.strip().lower()
     if raw.startswith("["):
-        return raw[1:raw.find("]")] if "]" in raw else raw
+        return raw[1 : raw.find("]")] if "]" in raw else raw
     if raw.count(":") == 1:
         raw = raw.split(":", 1)[0]
     return raw.rstrip(".")
@@ -193,12 +220,17 @@ class Public:
             return self.app(environ, start_response)
 
         def start(status, headers, exc_info=None):
-            return start_response(status, [*headers, ("Strict-Transport-Security", "max-age=31536000"),
-                                           ("X-Robots-Tag", "noindex")], exc_info)
+            return start_response(
+                status,
+                [*headers, ("Strict-Transport-Security", "max-age=31536000"), ("X-Robots-Tag", "noindex")],
+                exc_info,
+            )
+
         return self.app(dict(environ, **{"wsgi.url_scheme": "https"}), start)
 
 
 # -- Python sites --------------------------------------------------------------------------------------
+
 
 def load_python_sites(entries: list, base: Path, host: dict) -> tuple[list[App], list[str]]:
     """Each ``python = ...`` site of sites.toml, as an App (or a note for the owner on why it is missing)."""
@@ -226,10 +258,20 @@ def load_python_sites(entries: list, base: Path, host: dict) -> tuple[list[App],
             notes.append(note)
             continue
         legacy = made.get("legacy")
-        apps.append(App(mount, mount, made["app"], str(made.get("name") or entry.get("name") or mount.strip("/")),
-                        str(made.get("subtitle") or ""), str(made.get("description") or ""),
-                        preview=made.get("preview"), disallow=tuple(made.get("disallow") or ()),
-                        legacy=tuple(legacy) if legacy is not None else None, version=made.get("version")))
+        apps.append(
+            App(
+                mount,
+                mount,
+                made["app"],
+                str(made.get("name") or entry.get("name") or mount.strip("/")),
+                str(made.get("subtitle") or ""),
+                str(made.get("description") or ""),
+                preview=made.get("preview"),
+                disallow=tuple(made.get("disallow") or ()),
+                legacy=tuple(legacy) if legacy is not None else None,
+                version=made.get("version"),
+            )
+        )
     return apps, notes
 
 
@@ -247,6 +289,7 @@ def _version(app: App) -> str:
 
 # -- serving --------------------------------------------------------------------------------------------
 
+
 def _bindable(host: str, port: int) -> bool:
     family = socket.AF_INET6 if ipaddress.ip_address(host).version == 6 else socket.AF_INET
     try:
@@ -261,7 +304,9 @@ def _listen_spec(hosts: list[str], port: int) -> str:
     return " ".join(f"[{h}]:{port}" if ipaddress.ip_address(h).version == 6 else f"{h}:{port}" for h in hosts)
 
 
-def serve(app, hosts: list[str], port: int, *, supervised: bool, reason=None, poll_seconds: float = POLL_SECONDS) -> int:
+def serve(
+    app, hosts: list[str], port: int, *, supervised: bool, reason=None, poll_seconds: float = POLL_SECONDS
+) -> int:
     """Serve until stopped (0) or, supervised, until ``reason(round)`` names a reason to restart (75)."""
     from waitress.server import BaseWSGIServer, create_server
 
@@ -269,8 +314,11 @@ def serve(app, hosts: list[str], port: int, *, supervised: bool, reason=None, po
         raise OSError(f"ポート {port} はこのPCでほかのプログラムが使っています（もう起動していませんか）。")
     hosts = [item for item in hosts if item == LOOPBACK or _bindable(item, port)]
     server = create_server(app, listen=_listen_spec(hosts, port), threads=THREADS, ident="HomePage")
-    listeners = [server] if isinstance(server, BaseWSGIServer) else list(
-        {id(item): item for item in server.map.values() if isinstance(item, BaseWSGIServer)}.values())
+    listeners = (
+        [server]
+        if isinstance(server, BaseWSGIServer)
+        else list({id(item): item for item in server.map.values() if isinstance(item, BaseWSGIServer)}.values())
+    )
     restarting = threading.Event()
 
     def close_listeners() -> None:
@@ -318,8 +366,12 @@ def main(argv: list[str] | None = None) -> int:
     found = tailscale() if settings.listen == "network" else (None, None)
     hosts = addresses(settings, found)
     names = Hosts([*hosts, found[1], socket.gethostname(), *settings.hosts])
-    host = {"port": settings.port, "addresses": hosts, "names": sorted(names.names),
-            "urls": [f"http://{item}:{settings.port}/" for item in hosts]}
+    host = {
+        "port": settings.port,
+        "addresses": hosts,
+        "names": sorted(names.names),
+        "urls": [f"http://{item}:{settings.port}/" for item in hosts],
+    }
     apps, notes = load_python_sites(settings.python_sites, config.parent, host)
     portal = build(apps, allowed_hosts=names.allowed, visitor_hosts=names.visitor, config=config, notes=notes)
     portal.warm()
@@ -336,14 +388,21 @@ def main(argv: list[str] | None = None) -> int:
             if now and now != started[app.mount]:
                 return f"{app.name} が更新されました（{now}）"
         if settings.listen == "network" and rounds % NETWORK_POLL_ROUNDS == 0:
-            new = next((item for item in addresses(settings) if item not in hosts and _bindable(item, settings.port)), None)
+            new = next(
+                (item for item in addresses(settings) if item not in hosts and _bindable(item, settings.port)), None
+            )
             if new:
                 return f"新しいアドレス {new} が使えるようになりました"
         return None
 
     try:
-        return serve(Public(portal, names.visitor), hosts, settings.port,
-                     supervised=os.environ.get("HOME_SUPERVISED") == "1", reason=reason)
+        return serve(
+            Public(portal, names.visitor),
+            hosts,
+            settings.port,
+            supervised=os.environ.get("HOME_SUPERVISED") == "1",
+            reason=reason,
+        )
     except OSError as exc:
         print(f"起動できませんでした: {exc}", file=sys.stderr, flush=True)
         return 1

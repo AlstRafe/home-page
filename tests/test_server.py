@@ -1,4 +1,5 @@
 """The server (homepage/server.py) and launcher.py, without starting either. Run: python -m unittest discover -s tests"""
+
 from __future__ import annotations
 
 import importlib.util
@@ -15,7 +16,7 @@ from test_homepage import call
 import homepage
 from homepage import server
 
-FACTORY = '''
+FACTORY = """
 def site(mount, host):
     def app(environ, start_response):
         body = f"{environ['SCRIPT_NAME']} {environ['PATH_INFO']}".encode()
@@ -27,7 +28,7 @@ def site(mount, host):
 
 def broken(mount, host):
     raise RuntimeError("no database")
-'''
+"""
 
 
 class ServerTests(unittest.TestCase):
@@ -36,7 +37,8 @@ class ServerTests(unittest.TestCase):
         (self.tmp / "Shop" / "shopsite").mkdir(parents=True)
         (self.tmp / "Shop" / "shopsite" / "__init__.py").write_text(FACTORY, encoding="utf-8")
         self.config = self.tmp / "sites.toml"
-        self.config.write_text('''title = "x"
+        self.config.write_text(
+            """title = "x"
 
 [server]
 port = 5099
@@ -58,7 +60,9 @@ entry = "shopsite:broken"
 mount = "/nowhere"
 python = "Nowhere"
 entry = "nothing:site"
-''', encoding="utf-8")
+""",
+            encoding="utf-8",
+        )
 
     def tearDown(self):
         sys.modules.pop("shopsite", None)
@@ -92,7 +96,10 @@ entry = "nothing:site"
         apps, notes = server.load_python_sites(server.read_settings(self.config).python_sites, self.tmp, host)
         self.assertEqual([app.mount for app in apps], ["/shop"])
         shop = apps[0]
-        self.assertEqual((shop.key, shop.name, shop.subtitle, shop.disallow, shop.version()), ("/shop", "Shop", "a shop", ("/api/",), "v1"))
+        self.assertEqual(
+            (shop.key, shop.name, shop.subtitle, shop.disallow, shop.version()),
+            ("/shop", "Shop", "a shop", ("/api/",), "v1"),
+        )
         self.assertEqual(len(notes), 2)
         self.assertIn("no database", notes[0])
         self.assertIn("Nowhere", notes[1])
@@ -148,8 +155,9 @@ class LauncherTests(unittest.TestCase):
         try:
             (tmp / "App").mkdir()
             (tmp / "App" / "requirements.txt").write_text("flask\n", encoding="utf-8")
-            (tmp / "sites.toml").write_text('[server]\nport = 5123\n\n[[site]]\nmount = "/a"\npython = "App"\nentry = "a:site"\n',
-                                            encoding="utf-8")
+            (tmp / "sites.toml").write_text(
+                '[server]\nport = 5123\n\n[[site]]\nmount = "/a"\npython = "App"\nentry = "a:site"\n', encoding="utf-8"
+            )
             self.launcher.CONFIG = tmp / "sites.toml"
             port, files = self.launcher.server_settings()
             self.assertEqual((port, files), (5123, [(tmp / "App" / "requirements.txt").resolve()]))

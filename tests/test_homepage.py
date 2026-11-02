@@ -1,4 +1,5 @@
 """The front page ("/"), the sites under their paths, and sites.toml. Run: python -m unittest discover -s tests"""
+
 from __future__ import annotations
 
 import gzip
@@ -22,12 +23,21 @@ def call(app, path, method="GET", host=H, raw=False, **headers):
     """One request: (status code, headers dict, body text, or bytes with raw=True).
     ``headers``: request headers as environ keys (HTTP_IF_NONE_MATCH="...")."""
     target, _, query = path.partition("?")
-    environ = {"REQUEST_METHOD": method, "PATH_INFO": target, "QUERY_STRING": query, "SCRIPT_NAME": "",
-               "HTTP_HOST": host, "SERVER_NAME": "localhost", "wsgi.url_scheme": "http", **headers}
+    environ = {
+        "REQUEST_METHOD": method,
+        "PATH_INFO": target,
+        "QUERY_STRING": query,
+        "SCRIPT_NAME": "",
+        "HTTP_HOST": host,
+        "SERVER_NAME": "localhost",
+        "wsgi.url_scheme": "http",
+        **headers,
+    }
     seen = {}
 
     def start_response(status, headers, exc_info=None):
         seen["status"], seen["headers"] = int(status.split()[0]), dict(headers)
+
     body = b"".join(app(environ, start_response))
     return seen["status"], seen["headers"], body if raw else body.decode("utf-8", "replace")
 
@@ -39,9 +49,16 @@ def news(environ, start_response):
     return [body]
 
 
-NEWS = homepage.App("news", "/news", news, "NewsBridge", "翻訳して読み比べるニュース",
-                    preview=lambda: {"note": "取得 5分前", "items": [("台風が接近", "/stories/a"), ("株価が上昇", "/a/7")]},
-                    disallow=("/api/",), legacy=("/relay/",))
+NEWS = homepage.App(
+    "news",
+    "/news",
+    news,
+    "NewsBridge",
+    "翻訳して読み比べるニュース",
+    preview=lambda: {"note": "取得 5分前", "items": [("台風が接近", "/stories/a"), ("株価が上昇", "/a/7")]},
+    disallow=("/api/",),
+    legacy=("/relay/",),
+)
 
 
 class HomePageTests(unittest.TestCase):
@@ -50,16 +67,20 @@ class HomePageTests(unittest.TestCase):
         self.game = self.tmp / "Infra Game"
         (self.game / "js").mkdir(parents=True)
         (self.game / ".git").mkdir()
-        (self.game / "index.html").write_text('<!doctype html><title>CoreLab</title><body><script src="./js/app.js"></script></body>', encoding="utf-8")
+        (self.game / "index.html").write_text(
+            '<!doctype html><title>CoreLab</title><body><script src="./js/app.js"></script></body>', encoding="utf-8"
+        )
         (self.game / "js" / "app.js").write_text("1;", encoding="utf-8")
         (self.game / ".git" / "config").write_text("[core]", encoding="utf-8")
         (self.game / "README.md").write_text("notes", encoding="utf-8")
         (self.tmp / "secret.js").write_text("2;", encoding="utf-8")
         self.memo = self.tmp / "Memo"
         self.memo.mkdir()
-        (self.memo / "index.html").write_text("<!doctype html><title>Memo</title><BODY><p>memo</p></BODY>", encoding="utf-8")
+        (self.memo / "index.html").write_text(
+            "<!doctype html><title>Memo</title><BODY><p>memo</p></BODY>", encoding="utf-8"
+        )
         self.config = self.tmp / "sites.toml"
-        self.write('''
+        self.write("""
 title = "サイト一覧"
 lead = "小さなサイトの入口です。"
 points = ["登録不要", "無料"]
@@ -79,9 +100,13 @@ subtitle = "インフラ運用トレーニングゲーム"
 icon = "terminal"
 accent = "teal"
 home_link = "own"
-''')
-        self.portal = homepage.build([NEWS], allowed_hosts=lambda host: host in (H, PUBLIC),
-                                     visitor_hosts=lambda host: host == PUBLIC, config=self.config)
+""")
+        self.portal = homepage.build(
+            [NEWS],
+            allowed_hosts=lambda host: host in (H, PUBLIC),
+            visitor_hosts=lambda host: host == PUBLIC,
+            config=self.config,
+        )
 
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
@@ -128,9 +153,17 @@ home_link = "own"
         self.assertEqual((status, headers["Content-Type"]), (200, "text/javascript; charset=utf-8"))
         (self.game / ".claude").mkdir()
         (self.game / ".claude" / "settings.json").write_text("{}", encoding="utf-8")
-        hidden = ["/infra/.git/config", "/infra/README.md", "/infra/../secret.js", "/infra/%2e%2e/secret.js",
-                  "/infra/js", "/infra/nothing.js", "/infra/CLAUDE~1/settings.json", "/infra/.claude/settings.json",
-                  "/infra/js\\..\\..\\secret.js"]
+        hidden = [
+            "/infra/.git/config",
+            "/infra/README.md",
+            "/infra/../secret.js",
+            "/infra/%2e%2e/secret.js",
+            "/infra/js",
+            "/infra/nothing.js",
+            "/infra/CLAUDE~1/settings.json",
+            "/infra/.claude/settings.json",
+            "/infra/js\\..\\..\\secret.js",
+        ]
         try:
             (self.game / "linked").symlink_to(self.game / ".claude", target_is_directory=True)
             hidden.append("/infra/linked/settings.json")
@@ -142,12 +175,15 @@ home_link = "own"
         self.assertEqual(call(self.portal, "/infra/", host="evil.example")[0], 400)
 
     def test_a_site_without_its_own_way_back_gets_one(self):
-        self.write(self.config.read_text(encoding="utf-8") + '''
+        self.write(
+            self.config.read_text(encoding="utf-8")
+            + """
 [[site]]
 mount = "/memo"
 folder = "Memo"
 name = "Memo"
-''')
+"""
+        )
         status, _, body = call(self.portal, "/memo/")
         self.assertEqual(status, 200)
         self.assertIn('<a href="/" title="サイト一覧へ戻る"', body)
@@ -162,8 +198,9 @@ name = "Memo"
         self.assertEqual(gzip.decompress(body), script.read_bytes())
         self.assertLess(len(body), script.stat().st_size // 5)
         self.assertEqual(int(headers["Content-Length"]), len(body))
-        status, again, body = call(self.portal, "/infra/js/app.js", raw=True, HTTP_ACCEPT_ENCODING="gzip",
-                                   HTTP_IF_NONE_MATCH=headers["ETag"])
+        status, again, body = call(
+            self.portal, "/infra/js/app.js", raw=True, HTTP_ACCEPT_ENCODING="gzip", HTTP_IF_NONE_MATCH=headers["ETag"]
+        )
         self.assertEqual((status, body), (304, b""))
         self.assertEqual(again["ETag"], headers["ETag"])
         status, plain, body = call(self.portal, "/infra/js/app.js", raw=True)  # no gzip: another tag
@@ -174,8 +211,9 @@ name = "Memo"
         script.write_text("var mission = 2;\n" * 400, encoding="utf-8")
         later = time.time() + 5
         os.utime(script, (later, later))
-        status, changed, body = call(self.portal, "/infra/js/app.js", raw=True, HTTP_ACCEPT_ENCODING="gzip",
-                                     HTTP_IF_NONE_MATCH=headers["ETag"])
+        status, changed, body = call(
+            self.portal, "/infra/js/app.js", raw=True, HTTP_ACCEPT_ENCODING="gzip", HTTP_IF_NONE_MATCH=headers["ETag"]
+        )
         self.assertEqual(status, 200)
         self.assertNotEqual(changed["ETag"], headers["ETag"])
         self.assertIn(b"mission = 2", gzip.decompress(body))
@@ -186,7 +224,9 @@ name = "Memo"
         (self.game / "index.html").write_text(
             '<!doctype html><title>CoreLab</title><link rel="stylesheet" href="./css/app.css">'
             '<link rel="icon" href="data:image/svg+xml,x"><script src="/elsewhere.js"></script>'
-            "<script src='js/app.js'></script><script src=\"./js/none.js\"></script><body></body>", encoding="utf-8")
+            "<script src='js/app.js'></script><script src=\"./js/none.js\"></script><body></body>",
+            encoding="utf-8",
+        )
         status, headers, page = call(self.portal, "/infra/")
         self.assertEqual((status, headers["Cache-Control"]), (200, "no-cache"))
         address = re.search(r"js/app\.js\?v=(\w+)'", page)
@@ -210,8 +250,13 @@ name = "Memo"
 
     def test_a_python_sites_preview_is_made_once_a_minute_in_the_background(self):
         made = []
-        news_app = homepage.App("news", "/news", news, "NewsBridge",
-                                preview=lambda lang: made.append(lang) or {"items": [(f"story {len(made)}", "/a/1")]})
+        news_app = homepage.App(
+            "news",
+            "/news",
+            news,
+            "NewsBridge",
+            preview=lambda lang: made.append(lang) or {"items": [(f"story {len(made)}", "/a/1")]},
+        )
         portal = homepage.build([news_app], config=self.config)
         self.assertIn("story 1", call(portal, "/")[2])
         self.assertIn("story 1", call(portal, "/")[2])
@@ -234,7 +279,9 @@ name = "Memo"
         self.assertEqual(headers["Vary"], "Accept-Encoding, Cookie, Accept-Language")
         self.assertNotIn("Content-Encoding", call(self.portal, "/")[1])
         css = re.search(r'portal\.css\?v=(\w+)"', gzip.decompress(body).decode()).group(1)
-        self.assertEqual(call(self.portal, f"/portal.css?v={css}")[1]["Cache-Control"], "public, max-age=31536000, immutable")
+        self.assertEqual(
+            call(self.portal, f"/portal.css?v={css}")[1]["Cache-Control"], "public, max-age=31536000, immutable"
+        )
         old = time.time() - 86400 * 400
         for file in self.game.rglob("*"):
             os.utime(file, (old, old))
@@ -246,8 +293,14 @@ name = "Memo"
     def test_a_folder_site_shows_what_it_has_from_its_own_json(self):
         (self.game / "portal.json").write_text(
             '{"title": "すぐ遊べるミッション", "items": [["初日の当番", "/#/play/basics-01"], '
-            '["外へのリンク", "https://example.com/"], ["はじめてのコンテナ", "/#/play/docker-01"]]}', encoding="utf-8")
-        self.write(self.config.read_text(encoding="utf-8").replace('home_link = "own"', 'home_link = "own"\npreview = "portal.json"'))
+            '["外へのリンク", "https://example.com/"], ["はじめてのコンテナ", "/#/play/docker-01"]]}',
+            encoding="utf-8",
+        )
+        self.write(
+            self.config.read_text(encoding="utf-8").replace(
+                'home_link = "own"', 'home_link = "own"\npreview = "portal.json"'
+            )
+        )
         page = call(self.portal, "/")[2]
         self.assertIn('<p class="now-head">すぐ遊べるミッション<span>更新 ', page)
         self.assertIn('<a href="/infra/#/play/basics-01">初日の当番</a>', page)
@@ -264,7 +317,9 @@ name = "Memo"
         self.assertIn("preview はそのフォルダの中の .json", call(self.portal, "/")[2])
 
     def test_sites_toml_edits_show_without_a_restart_and_mistakes_are_explained_to_the_owner(self):
-        self.write(self.config.read_text(encoding="utf-8") + '''
+        self.write(
+            self.config.read_text(encoding="utf-8")
+            + """
 [[site]]
 mount = "/memo"
 folder = "Memo"
@@ -275,7 +330,8 @@ accent = "pink"
 mount = "/gone"
 folder = "Nowhere"
 name = "Gone"
-''')
+"""
+        )
         page = call(self.portal, "/")[2]
         self.assertNotIn("/memo/", page)
         self.assertIn("3 番目のサイト: accent は", page)
@@ -290,7 +346,9 @@ name = "Gone"
         self.assertNotIn("読めませんでした", call(self.portal, "/", host=PUBLIC)[2])
 
     def test_a_site_kept_from_the_public_name(self):
-        self.write(self.config.read_text(encoding="utf-8").replace('home_link = "own"', 'home_link = "own"\npublic = false'))
+        self.write(
+            self.config.read_text(encoding="utf-8").replace('home_link = "own"', 'home_link = "own"\npublic = false')
+        )
         owner = call(self.portal, "/")[2]
         self.assertIn("/infra/", owner)
         self.assertIn("非公開", owner)
@@ -324,11 +382,13 @@ name = "Gone"
         self.assertEqual(call(alone, "/a/7")[0], 404)
 
     def test_mounts_that_would_clash_are_refused(self):
-        self.write('[[site]]\nmount = "/news"\nfolder = "Memo"\nname = "X"\n\n'
-                   '[[site]]\nmount = "/Memo"\nfolder = "Memo"\nname = "X"\n\n'
-                   '[[site]]\nmount = "/robots.txt"\nfolder = "Memo"\nname = "X"\n\n'
-                   '[[site]]\nmount = "/memo"\nfolder = "Memo"\nname = "Memo"\n\n'
-                   '[[site]]\nmount = "/memo"\nfolder = "Infra Game"\nname = "Again"\n')
+        self.write(
+            '[[site]]\nmount = "/news"\nfolder = "Memo"\nname = "X"\n\n'
+            '[[site]]\nmount = "/Memo"\nfolder = "Memo"\nname = "X"\n\n'
+            '[[site]]\nmount = "/robots.txt"\nfolder = "Memo"\nname = "X"\n\n'
+            '[[site]]\nmount = "/memo"\nfolder = "Memo"\nname = "Memo"\n\n'
+            '[[site]]\nmount = "/memo"\nfolder = "Infra Game"\nname = "Again"\n'
+        )
         page = call(self.portal, "/")[2]
         for number in (1, 2, 3, 5):
             self.assertIn(f"{number} 番目のサイト", page)
@@ -351,8 +411,13 @@ name = "Gone"
         self.assertEqual(call(self.portal, "/infra/?lang=zh-TW")[1]["Location"], "/infra/")
         self.assertEqual(call(self.portal, "/?lang=fr")[0], 200)  # not one of ours: no choice
         self.assertIn("Secure", call(self.portal, "/?lang=ko", **{"wsgi.url_scheme": "https"})[1]["Set-Cookie"])
-        self.write(self.config.read_text(encoding="utf-8").replace('home_link = "own"', 'home_link = "own"\n\n[site.ko]\nsubtitle = "인프라 운영 트레이닝 게임"\ntags = ["설치 불필요"]')
-                   + '\n[ko]\ntitle = "사이트 목록"\npoints = ["무료"]\n')
+        self.write(
+            self.config.read_text(encoding="utf-8").replace(
+                'home_link = "own"',
+                'home_link = "own"\n\n[site.ko]\nsubtitle = "인프라 운영 트레이닝 게임"\ntags = ["설치 불필요"]',
+            )
+            + '\n[ko]\ntitle = "사이트 목록"\npoints = ["무료"]\n'
+        )
         status, headers, page = call(self.portal, "/", HTTP_COOKIE="lang=ko")
         self.assertIn('<html lang="ko">', page)
         self.assertIn("<h1>사이트 목록</h1>", page)
@@ -360,7 +425,7 @@ name = "Gone"
         self.assertIn("小さなサイトの入口です。", page)  # a text without a translation stays Japanese
         self.assertIn('<p class="sub">인프라 운영 트레이닝 게임</p>', page)
         self.assertIn("<li>설치 불필요</li>", page)
-        self.assertIn('CoreLab 열기', page)
+        self.assertIn("CoreLab 열기", page)
         self.assertIn("사이트 2개", page)
         self.assertIn('<a href="?lang=ko" lang="ko" hreflang="ko" aria-current="true">한국어</a>', page)
         self.assertIn('<a href="?lang=en-GB" lang="en-GB" hreflang="en-GB">English (UK)</a>', page)
@@ -376,8 +441,18 @@ name = "Gone"
 
     def test_the_browsers_languages_decide_until_the_visitor_chooses(self):
         from homepage import i18n
-        cases = {"": "ja", "ja,en;q=0.8": "ja", "ko-KR,ko;q=0.9": "ko", "zh-TW,zh;q=0.9": "zh-TW", "zh-CN": "zh-TW",
-                 "en-US": "en-GB", "fr-FR,fr;q=0.9": "en-GB", "fr,ko;q=0.5,ja;q=0.8": "ja", "en;q=0,ko": "ko"}
+
+        cases = {
+            "": "ja",
+            "ja,en;q=0.8": "ja",
+            "ko-KR,ko;q=0.9": "ko",
+            "zh-TW,zh;q=0.9": "zh-TW",
+            "zh-CN": "zh-TW",
+            "en-US": "en-GB",
+            "fr-FR,fr;q=0.9": "en-GB",
+            "fr,ko;q=0.5,ja;q=0.8": "ja",
+            "en;q=0,ko": "ko",
+        }
         for header, lang in cases.items():
             self.assertEqual(i18n.from_browser(header), lang, header)
         self.assertEqual(i18n.chosen({"HTTP_COOKIE": "lang=zh-TW; other=1", "HTTP_ACCEPT_LANGUAGE": "ko"}), "zh-TW")
@@ -385,20 +460,36 @@ name = "Gone"
 
     def test_previews_and_the_way_back_in_the_visitors_language(self):
         seen = []
-        news_app = homepage.App("news", "/news", news, "NewsBridge",
-                                preview=lambda lang: seen.append(lang) or {"note": f"note-{lang}", "items": [("x", "/a/1")]})
+        news_app = homepage.App(
+            "news",
+            "/news",
+            news,
+            "NewsBridge",
+            preview=lambda lang: seen.append(lang) or {"note": f"note-{lang}", "items": [("x", "/a/1")]},
+        )
         portal = homepage.build([news_app], config=self.config)
         self.assertIn("note-zh-TW", call(portal, "/", HTTP_COOKIE="lang=zh-TW")[2])
         self.assertEqual(seen, ["zh-TW"])
         (self.game / "portal.json").write_text(
             '{"title": {"ja": "すぐ遊べるミッション", "en-GB": "Missions to play now"}, '
-            '"items": [[{"ja": "初日の当番", "ko": "첫날 당번"}, "/#/play/basics-01"]]}', encoding="utf-8")
-        self.write(self.config.read_text(encoding="utf-8").replace('home_link = "own"', 'home_link = "own"\npreview = "portal.json"'))
-        self.assertIn('<p class="now-head">Missions to play now<span>Updated ', call(self.portal, "/", HTTP_COOKIE="lang=en-GB")[2])
+            '"items": [[{"ja": "初日の当番", "ko": "첫날 당번"}, "/#/play/basics-01"]]}',
+            encoding="utf-8",
+        )
+        self.write(
+            self.config.read_text(encoding="utf-8").replace(
+                'home_link = "own"', 'home_link = "own"\npreview = "portal.json"'
+            )
+        )
+        self.assertIn(
+            '<p class="now-head">Missions to play now<span>Updated ',
+            call(self.portal, "/", HTTP_COOKIE="lang=en-GB")[2],
+        )
         korean = call(self.portal, "/", HTTP_COOKIE="lang=ko")[2]
-        self.assertIn('>첫날 당번</a>', korean)
+        self.assertIn(">첫날 당번</a>", korean)
         self.assertIn('<p class="now-head">すぐ遊べるミッション<span>업데이트 ', korean)
-        self.write(self.config.read_text(encoding="utf-8") + '\n[[site]]\nmount = "/memo"\nfolder = "Memo"\nname = "Memo"\n')
+        self.write(
+            self.config.read_text(encoding="utf-8") + '\n[[site]]\nmount = "/memo"\nfolder = "Memo"\nname = "Memo"\n'
+        )
         status, headers, body = call(self.portal, "/memo/", HTTP_COOKIE="lang=en-GB")
         self.assertIn('title="Back to all sites"', body)
         self.assertIn("All sites</a>", body)
@@ -406,7 +497,9 @@ name = "Gone"
         self.assertIn("Cookie", headers["Vary"])
 
     def test_a_missing_page_shows_the_way_back_to_browsers(self):
-        status, headers, page = call(self.portal, "/infra/nothing.html", HTTP_ACCEPT="text/html,*/*", HTTP_COOKIE="lang=ko")
+        status, headers, page = call(
+            self.portal, "/infra/nothing.html", HTTP_ACCEPT="text/html,*/*", HTTP_COOKIE="lang=ko"
+        )
         self.assertEqual(status, 404)
         self.assertIn('<html lang="ko">', page)
         self.assertIn("페이지를 찾을 수 없습니다", page)
@@ -421,6 +514,7 @@ name = "Gone"
 
     def test_this_folders_own_sites_toml_reads_cleanly(self):
         from dataclasses import replace
+
         portal = homepage.build([replace(NEWS, key="/news")])  # as the server loads the Python site
         problems = [p for p in portal.problems if "index.html がありません" not in p]
         self.assertEqual(problems, [])

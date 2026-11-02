@@ -9,6 +9,7 @@ folders in the settings are dropped (the articles live beside the app here), Win
 are left out, and the keys go into this server's credential store (keyrings.alt, a file only the
 sites account can read).
 """
+
 from __future__ import annotations
 
 import json
@@ -26,8 +27,7 @@ SECRET_NAMES = {"azure_api_key", "stdict_api_key", "relay_token"}
 
 def extract(archive: Path, into: Path) -> None:
     with tarfile.open(archive) as tar:
-        members = [member for member in tar.getmembers()
-                   if member.isfile() or member.isdir()]
+        members = [member for member in tar.getmembers() if member.isfile() or member.isdir()]
         if hasattr(tarfile, "data_filter"):
             tar.extractall(into, members=members, filter="data")
         else:  # Python before 3.11.4: refuse anything leaving the folder ourselves
@@ -53,6 +53,7 @@ def store_secrets(path: Path) -> list[str]:
     if not path.is_file():
         return []
     import keyring
+
     secrets = json.loads(path.read_text(encoding="utf-8"))
     stored = []
     for name, value in secrets.items():
@@ -79,10 +80,10 @@ def main(argv: list[str]) -> int:
             (staging / "instance" / name).unlink(missing_ok=True)
         articles = app / "articles"
         # The articles beside the app: no folder of the PC's in the settings, the collector's too.
-        edit_json(staging / "instance" / "settings.json",
-                  lambda value: value.update(library_dir="", start_at_logon=False))
-        edit_json(staging / "instance" / "collector.json",
-                  lambda value: value.update(library_root=str(articles)))
+        edit_json(
+            staging / "instance" / "settings.json", lambda value: value.update(library_dir="", start_at_logon=False)
+        )
+        edit_json(staging / "instance" / "collector.json", lambda value: value.update(library_root=str(articles)))
         stored = store_secrets(staging / "secrets.json")
 
         kept = backup / f"before-import-{datetime.now():%Y%m%d-%H%M%S}"
@@ -100,8 +101,10 @@ def main(argv: list[str]) -> int:
         shutil.rmtree(staging, ignore_errors=True)
 
     count = sum(1 for path in (app / "articles").rglob("*") if path.is_file())
-    print(f"取り込みました: 記事 {count} ファイル、instance/ {len(list((app / 'instance').iterdir()))} 個、"
-          f"キー {', '.join(stored) or 'なし'}")
+    print(
+        f"取り込みました: 記事 {count} ファイル、instance/ {len(list((app / 'instance').iterdir()))} 個、"
+        f"キー {', '.join(stored) or 'なし'}"
+    )
     if kept.exists():
         print(f"それまでの instance/ と articles/ は {kept} に移しました。")
     return 0

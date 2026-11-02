@@ -1,5 +1,6 @@
 """The cloud server's Python helpers (deploy/): moving News Site's data from the PC and the daily backup.
 Run: python -m unittest discover -s tests"""
+
 from __future__ import annotations
 
 import json
@@ -26,13 +27,17 @@ def make_pc(folder: Path) -> Path:
     """A PC's Home Page with News Site beside it, as sites.toml names it."""
     (folder / "Home Page").mkdir(parents=True)
     (folder / "Home Page" / "sites.toml").write_text(
-        '[[site]]\nmount = "/news"\npython = "../News Site/work/app"\nentry = "newsreader.hosting:site"\n', encoding="utf-8")
+        '[[site]]\nmount = "/news"\npython = "../News Site/work/app"\nentry = "newsreader.hosting:site"\n',
+        encoding="utf-8",
+    )
     app = folder / "News Site" / "work" / "app"
     (app / "instance").mkdir(parents=True)
     (app / "articles" / "NAVER NEWS").mkdir(parents=True)
     (app / "articles" / "NAVER NEWS" / "a.html").write_text("<p>a</p>", encoding="utf-8")
     instance = app / "instance"
-    (instance / "settings.json").write_text(json.dumps({"library_dir": PC_ARTICLES, "start_at_logon": True, "provider": "azure"}))
+    (instance / "settings.json").write_text(
+        json.dumps({"library_dir": PC_ARTICLES, "start_at_logon": True, "provider": "azure"})
+    )
     (instance / "collector.json").write_text(json.dumps({"library_root": PC_ARTICLES}))
     for name in ("collector-task.json", "hosted.json", "server-task.json"):
         (instance / name).write_text("{}")
@@ -61,13 +66,16 @@ class MoveDataTest(unittest.TestCase):
         self.folder = Path(tempfile.mkdtemp())
         self.pc_app = make_pc(self.folder / "pc")
         self.archive = self.folder / "news-data.tar.gz"
-        with mock.patch.object(migrate, "HOME", self.folder / "pc" / "Home Page"), \
-                mock.patch.object(migrate, "read_secrets", return_value={"azure_api_key": "secret-1"}):
+        with (
+            mock.patch.object(migrate, "HOME", self.folder / "pc" / "Home Page"),
+            mock.patch.object(migrate, "read_secrets", return_value={"azure_api_key": "secret-1"}),
+        ):
             self.assertEqual(migrate.news_app(), self.pc_app.resolve())
             migrate.pack(migrate.news_app(), self.archive)
 
     def tearDown(self):
         import shutil
+
         shutil.rmtree(self.folder, ignore_errors=True)
 
     def test_the_archive_has_the_data_and_none_of_the_windows_records(self):
@@ -92,9 +100,13 @@ class MoveDataTest(unittest.TestCase):
             code = import_news_data.main([str(self.archive), str(app), str(self.folder / "srv" / "backup")])
         self.assertEqual(code, 0)
         settings = json.loads((app / "instance" / "settings.json").read_text(encoding="utf-8"))
-        self.assertEqual((settings["library_dir"], settings["start_at_logon"], settings["provider"]), ("", False, "azure"))
-        self.assertEqual(json.loads((app / "instance" / "collector.json").read_text())["library_root"],
-                         str((app / "articles").resolve()))
+        self.assertEqual(
+            (settings["library_dir"], settings["start_at_logon"], settings["provider"]), ("", False, "azure")
+        )
+        self.assertEqual(
+            json.loads((app / "instance" / "collector.json").read_text())["library_root"],
+            str((app / "articles").resolve()),
+        )
         self.assertTrue((app / "articles" / "NAVER NEWS" / "a.html").is_file())
         db = sqlite3.connect(app / "instance" / "library.sqlite3")
         self.assertEqual(db.execute("SELECT title FROM articles").fetchall(), [("kept",)])
@@ -122,19 +134,22 @@ class BackupTest(unittest.TestCase):
                 names = set(tar.getnames())
                 self.assertIn("instance/library.sqlite3", names)
                 self.assertNotIn("instance/collector.lock", names)
-                tar.extract("instance/library.sqlite3", folder, filter="data") if hasattr(tarfile, "data_filter") \
-                    else tar.extract("instance/library.sqlite3", folder)
+                tar.extract("instance/library.sqlite3", folder, filter="data") if hasattr(
+                    tarfile, "data_filter"
+                ) else tar.extract("instance/library.sqlite3", folder)
             db = sqlite3.connect(Path(folder) / "instance" / "library.sqlite3")
             self.assertEqual(db.execute("SELECT title FROM articles").fetchall(), [("kept",)])
             db.close()
 
 
-
 class KeepaliveTest(unittest.TestCase):
     def test_the_busy_loop_steps_aside_whenever_anything_else_wants_a_cpu(self):
         loads = iter(["0.10 0.20 0.30 3/180 4242\n"] * 3 + ["0.10 0.20 0.30 1/180 4242\n"] * 1000)
-        with mock.patch("builtins.open", side_effect=lambda *a, **k: __import__("io").StringIO(next(loads))), \
-                mock.patch.object(keepalive, "YIELD", 0.01), mock.patch.object(keepalive.time, "sleep") as slept:
+        with (
+            mock.patch("builtins.open", side_effect=lambda *a, **k: __import__("io").StringIO(next(loads))),
+            mock.patch.object(keepalive, "YIELD", 0.01),
+            mock.patch.object(keepalive.time, "sleep") as slept,
+        ):
             keepalive.busy(0.05)
         self.assertEqual(slept.call_count, 3)  # once for each look that found the sites busy
         with mock.patch("builtins.open", side_effect=OSError):

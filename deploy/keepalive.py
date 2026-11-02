@@ -14,6 +14,7 @@ sites, Tailscale and the collector always come first, and their own work counts 
 KEEPALIVE_MEMORY_PERCENT (default 25, 0 = none) and KEEPALIVE_BUSY_SECONDS (default 90 per 600)
 change how much.
 """
+
 from __future__ import annotations
 
 import mmap
@@ -39,12 +40,12 @@ def total_memory() -> int:
 
 def hold_memory(percent: int) -> mmap.mmap | None:
     total = total_memory()
-    if percent <= 0 or total < 4 * 1024 ** 3:  # a 1 GB micro VM needs its memory for the sites
+    if percent <= 0 or total < 4 * 1024**3:  # a 1 GB micro VM needs its memory for the sites
         return None
     size = total * percent // 100 // PAGE * PAGE
     block = mmap.mmap(-1, size)
     touch(block)
-    print(f"{size // 1024 ** 2} MB を確保しました（全体の {percent}%）", flush=True)
+    print(f"{size // 1024**2} MB を確保しました（全体の {percent}%）", flush=True)
     return block
 
 

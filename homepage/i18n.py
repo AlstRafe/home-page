@@ -8,6 +8,7 @@ browser's languages decide (Accept-Language), and Japanese when it sends none.
 Texts are written in Japanese and looked up here by that Japanese (``text(lang, "サイト一覧")``);
 a text without a translation is shown in Japanese.
 """
+
 from __future__ import annotations
 
 import html
@@ -31,21 +32,38 @@ TEXTS = {
     "特徴": {"ko": "특징", "en-GB": "Features", "zh-TW": "特色"},
     "新着": {"ko": "새 소식", "en-GB": "Latest", "zh-TW": "最新"},
     "{name} を開く": {"ko": "{name} 열기", "en-GB": "Open {name}", "zh-TW": "開啟 {name}"},
-    "非公開（このPCからだけ）": {"ko": "비공개 (이 PC에서만)", "en-GB": "Private (this PC only)", "zh-TW": "未公開（僅限本機）"},
+    "非公開（このPCからだけ）": {
+        "ko": "비공개 (이 PC에서만)",
+        "en-GB": "Private (this PC only)",
+        "zh-TW": "未公開（僅限本機）",
+    },
     "サイト {count} 件": {"ko": "사이트 {count}개", "en-GB": "{count} sites", "zh-TW": "共 {count} 個網站"},
     "エラー {status}": {"ko": "오류 {status}", "en-GB": "Error {status}", "zh-TW": "錯誤 {status}"},
     "ページが見つかりません": {"ko": "페이지를 찾을 수 없습니다", "en-GB": "Page not found", "zh-TW": "找不到這個頁面"},
     "アドレスが変わったか、なくなった可能性があります。": {
         "ko": "주소가 바뀌었거나 페이지가 없어졌을 수 있습니다.",
         "en-GB": "The address may have changed, or the page may no longer exist.",
-        "zh-TW": "網址可能已變更，或頁面已不存在。"},
+        "zh-TW": "網址可能已變更，或頁面已不存在。",
+    },
     "{name} のトップへ": {"ko": "{name} 첫 화면으로", "en-GB": "{name} home", "zh-TW": "前往 {name} 首頁"},
 }
 
 _WEEKDAYS = {"ja": "月火水木金土日", "ko": "월화수목금토일", "zh-TW": "一二三四五六日"}
 _EN_WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
-_EN_MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September",
-              "October", "November", "December")
+_EN_MONTHS = (
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+)
 
 
 def text(lang: str, ja: str, **values) -> str:
@@ -75,7 +93,9 @@ def month_day(lang: str, day: datetime) -> str:
 
 
 def updated(lang: str, day: datetime) -> str:
-    return {"ko": "업데이트 {d}", "en-GB": "Updated {d}", "zh-TW": "更新於 {d}"}.get(lang, "更新 {d}").format(d=month_day(lang, day))
+    return {"ko": "업데이트 {d}", "en-GB": "Updated {d}", "zh-TW": "更新於 {d}"}.get(lang, "更新 {d}").format(
+        d=month_day(lang, day)
+    )
 
 
 def chosen(environ) -> str:
@@ -124,16 +144,24 @@ def asked(environ) -> tuple[str, str] | None:
 
 def set_cookie(lang: str, secure: bool = False) -> tuple[str, str]:
     """The header that remembers ``lang`` for every site of this host."""
-    return ("Set-Cookie", f"{COOKIE}={lang}; Path=/; Max-Age={COOKIE_SECONDS}; SameSite=Lax" + ("; Secure" if secure else ""))
+    return (
+        "Set-Cookie",
+        f"{COOKIE}={lang}; Path=/; Max-Age={COOKIE_SECONDS}; SameSite=Lax" + ("; Secure" if secure else ""),
+    )
 
 
 def menu(lang: str, label_class: str = "lang") -> str:
     """The language menu every site shows in its header: a <details> that needs no script
     (each choice is a link with ?lang=), the current language marked."""
     current = ' aria-current="true"'
-    items = "".join(f'<li><a href="?{COOKIE}={code}" lang="{code}" hreflang="{code}"{current if code == lang else ""}>'
-                    f'{html.escape(NAMES[code])}</a></li>' for code in LANGS)
+    items = "".join(
+        f'<li><a href="?{COOKIE}={code}" lang="{code}" hreflang="{code}"{current if code == lang else ""}>'
+        f"{html.escape(NAMES[code])}</a></li>"
+        for code in LANGS
+    )
     label = html.escape(text(lang, "言語"))
-    return (f'<details class="{label_class}"><summary title="{label}" aria-label="{label}: {html.escape(NAMES[lang])}">'
-            f'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>'
-            f'<span>{html.escape(NAMES[lang])}</span></summary><ul>{items}</ul></details>')
+    return (
+        f'<details class="{label_class}"><summary title="{label}" aria-label="{label}: {html.escape(NAMES[lang])}">'
+        f'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>'
+        f"<span>{html.escape(NAMES[lang])}</span></summary><ul>{items}</ul></details>"
+    )

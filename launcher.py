@@ -12,6 +12,7 @@
 it waits for the network to come up, and does nothing when the server already answers.
 Needs Python 3.11 or newer.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -59,8 +60,11 @@ def server_settings() -> tuple[int, list[Path]]:
     server = data.get("server") if isinstance(data.get("server"), dict) else {}
     port = server.get("port", 5000) if isinstance(server.get("port", 5000), int) else 5000
     sites = data.get("site") if isinstance(data.get("site"), list) else []
-    files = [(CONFIG.parent / str(entry["python"])).resolve() / "requirements.txt"
-             for entry in sites if isinstance(entry, dict) and isinstance(entry.get("python"), str)]
+    files = [
+        (CONFIG.parent / str(entry["python"])).resolve() / "requirements.txt"
+        for entry in sites
+        if isinstance(entry, dict) and isinstance(entry.get("python"), str)
+    ]
     return port, [file for file in files if file.is_file()]
 
 
@@ -104,6 +108,7 @@ def install_packages(python: Path) -> None:
 
 # -- start at logon ----------------------------------------------------------------------------------
 
+
 def logon_task_xml(command: Path, arguments: str, account: str) -> ElementTree.ElementTree:
     """Task Scheduler definition: start the sites (no window) 30 s after this user logs on."""
     namespace = "http://schemas.microsoft.com/windows/2004/02/mit/task"
@@ -116,8 +121,11 @@ def logon_task_xml(command: Path, arguments: str, account: str) -> ElementTree.E
         return node
 
     task = ElementTree.Element(f"{{{namespace}}}Task", {"version": "1.3"})
-    element(element(task, "RegistrationInfo"), "Description",
-            "Start this PC's sites (Home Page: the site list, News Site, CoreLab) in the background at logon.")
+    element(
+        element(task, "RegistrationInfo"),
+        "Description",
+        "Start this PC's sites (Home Page: the site list, News Site, CoreLab) in the background at logon.",
+    )
     trigger = element(element(task, "Triggers"), "LogonTrigger")
     element(trigger, "Enabled", "true")
     element(trigger, "UserId", account)
@@ -127,11 +135,19 @@ def logon_task_xml(command: Path, arguments: str, account: str) -> ElementTree.E
     element(principal, "LogonType", "InteractiveToken")
     element(principal, "RunLevel", "LeastPrivilege")
     settings = element(task, "Settings")
-    for name, value in (("MultipleInstancesPolicy", "IgnoreNew"), ("DisallowStartIfOnBatteries", "false"),
-                        ("StopIfGoingOnBatteries", "false"), ("AllowHardTerminate", "true"),
-                        ("StartWhenAvailable", "false"), ("RunOnlyIfNetworkAvailable", "false"),
-                        ("WakeToRun", "false"), ("Enabled", "true"), ("Hidden", "false"),
-                        ("ExecutionTimeLimit", "PT0S"), ("Priority", "7")):
+    for name, value in (
+        ("MultipleInstancesPolicy", "IgnoreNew"),
+        ("DisallowStartIfOnBatteries", "false"),
+        ("StopIfGoingOnBatteries", "false"),
+        ("AllowHardTerminate", "true"),
+        ("StartWhenAvailable", "false"),
+        ("RunOnlyIfNetworkAvailable", "false"),
+        ("WakeToRun", "false"),
+        ("Enabled", "true"),
+        ("Hidden", "false"),
+        ("ExecutionTimeLimit", "PT0S"),
+        ("Priority", "7"),
+    ):
         element(settings, name, value)
     execute = element(element(task, "Actions", Context="SitesUser"), "Exec")
     element(execute, "Command", str(command))
@@ -170,8 +186,12 @@ def ensure_logon_task(enabled: bool) -> None:
     definition = INSTANCE / f"server-task-{os.getpid()}.xml"
     try:
         logon_task_xml(pythonw, arguments, account).write(definition, encoding="utf-16", xml_declaration=True)
-        created = subprocess.run([scheduler, "/Create", "/TN", TASK_NAME, "/XML", str(definition), "/F"],
-                                 capture_output=True, text=True, errors="replace")
+        created = subprocess.run(
+            [scheduler, "/Create", "/TN", TASK_NAME, "/XML", str(definition), "/F"],
+            capture_output=True,
+            text=True,
+            errors="replace",
+        )
     finally:
         definition.unlink(missing_ok=True)
     if created.returncode:
@@ -182,6 +202,7 @@ def ensure_logon_task(enabled: bool) -> None:
 
 
 # -- running ----------------------------------------------------------------------------------------------
+
 
 def answering(port: int) -> bool:
     """Whether something answers on this PC at ``port`` (the server is running already)."""
@@ -196,6 +217,7 @@ def network_up() -> bool:
     """Tailscale's or the LAN's address is there (loopback alone means: not up yet)."""
     sys.path.insert(0, str(HOME))
     from homepage.server import Settings, addresses
+
     return len(addresses(Settings())) > 1
 
 
@@ -254,18 +276,32 @@ def python_site_servers() -> list[int]:
         data = tomllib.loads(CONFIG.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
         return []
-    folders = [str((CONFIG.parent / entry["python"]).resolve()).casefold() for entry in data.get("site", [])
-               if isinstance(entry, dict) and isinstance(entry.get("python"), str)]
+    folders = [
+        str((CONFIG.parent / entry["python"]).resolve()).casefold()
+        for entry in data.get("site", [])
+        if isinstance(entry, dict) and isinstance(entry.get("python"), str)
+    ]
     if os.name != "nt" or not folders:
         return []
-    listing = subprocess.run(["powershell", "-NoProfile", "-Command",
-                              "Get-CimInstance Win32_Process | ForEach-Object { \"$($_.ProcessId)`t$($_.CommandLine)\" }"],
-                             capture_output=True, text=True, errors="replace", creationflags=CREATE_NO_WINDOW).stdout
+    listing = subprocess.run(
+        [
+            "powershell",
+            "-NoProfile",
+            "-Command",
+            'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId)`t$($_.CommandLine)" }',
+        ],
+        capture_output=True,
+        text=True,
+        errors="replace",
+        creationflags=CREATE_NO_WINDOW,
+    ).stdout
     found = []
     for line in listing.splitlines():
         pid, _, command = line.partition("\t")
         command = command.casefold()
-        if pid.isdecimal() and any(f"{folder}\\{name}" in command for folder in folders for name in ("launcher.py", "app.py")):
+        if pid.isdecimal() and any(
+            f"{folder}\\{name}" in command for folder in folders for name in ("launcher.py", "app.py")
+        ):
             found.append(int(pid))
     return found
 
@@ -287,7 +323,9 @@ def take_over(port: int) -> int:
     while answering(port) and time.monotonic() < deadline:
         time.sleep(1)
     if answering(port):
-        print(f"ポート {port} がまだ使われています。使っているプログラムを止めてからやり直してください。", file=sys.stderr)
+        print(
+            f"ポート {port} がまだ使われています。使っているプログラムを止めてからやり直してください。", file=sys.stderr
+        )
         return 1
     scheduler = shutil.which("schtasks.exe") or "schtasks"
     subprocess.run([scheduler, "/Run", "/TN", TASK_NAME], capture_output=True, text=True, errors="replace")

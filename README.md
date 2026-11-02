@@ -36,6 +36,7 @@ Python 3.11 以上。サーバー用の仮想環境は `%LOCALAPPDATA%\HomePage\
 - 元に戻す: `--no-logon` → このサーバーを止める → News Site の `launcher.py` を起動（News Site の設定画面で「ログオン時に起動」を入れ直す）
 
 サーバーは次のとき自動で再起動する（処理中の要求を返してから。約15秒以内に気づく）:
+
 - `homepage/*.py` が変わった
 - sites.toml の `[server]` か Python サイトの指定（mount・python・entry）が変わった
 - Python サイトの版が変わった（News Site は配備で `VERSION` が書き換わる）。requirements.txt が変わっていればパッケージも入れ直す

@@ -15,6 +15,7 @@
 
 Options: --host sites  --user ubuntu  --new-address  --data-only (steps 3-4)  --address-only (step 5)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -46,6 +47,7 @@ class Stop(Exception):
 
 # -- the server, over ssh ---------------------------------------------------------------------------
 
+
 class Server:
     def __init__(self, host: str, user: str):
         self.user = user
@@ -59,12 +61,21 @@ class Server:
             self.target = f"{self.user}@{address[0]}"
 
     def command(self, remote: str, *, tty: bool = False) -> list[str]:
-        return ["ssh", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=30",
-                *(["-t"] if tty else []), self.target, remote]
+        return [
+            "ssh",
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+            "-o",
+            "ConnectTimeout=30",
+            *(["-t"] if tty else []),
+            self.target,
+            remote,
+        ]
 
     def run(self, remote: str, *, tty: bool = False, stdin=None, capture: bool = False) -> subprocess.CompletedProcess:
-        return subprocess.run(self.command(remote, tty=tty), stdin=stdin, text=capture if capture else None,
-                              capture_output=capture)
+        return subprocess.run(
+            self.command(remote, tty=tty), stdin=stdin, text=capture if capture else None, capture_output=capture
+        )
 
     def send(self, local: Path, remote_name: str) -> None:
         with local.open("rb") as data:
@@ -74,11 +85,15 @@ class Server:
 
 def check_ssh(server: Server) -> None:
     if not shutil.which("ssh"):
-        raise Stop("ssh がありません。Windows の「設定 → システム → オプション機能」で OpenSSH クライアントを追加してください。")
+        raise Stop(
+            "ssh がありません。Windows の「設定 → システム → オプション機能」で OpenSSH クライアントを追加してください。"
+        )
     print(f"{server.target} につないでいます（初回はブラウザでの確認を求められることがあります）...")
     if server.run("true").returncode != 0:
-        raise Stop(f"{server.target} に ssh で入れませんでした。VM が Tailscale の管理画面に出ているか、"
-                   "deploy/README.md の「うまくいかないとき」を見てください。")
+        raise Stop(
+            f"{server.target} に ssh で入れませんでした。VM が Tailscale の管理画面に出ているか、"
+            "deploy/README.md の「うまくいかないとき」を見てください。"
+        )
     server.pin()
 
 
@@ -91,11 +106,14 @@ def set_up(server: Server) -> None:
         if code == 0:
             return
         if code != 3:
-            raise Stop(f"サーバーの準備が途中で止まりました（コード {code}）。上の表示を見て、直したらもう一度実行してください。")
+            raise Stop(
+                f"サーバーの準備が途中で止まりました（コード {code}）。上の表示を見て、直したらもう一度実行してください。"
+            )
         input("\n上の鍵を GitHub に登録したら Enter を押してください（やめるなら Ctrl+C）: ")
 
 
 # -- News Site on this PC ---------------------------------------------------------------------------
+
 
 def news_app() -> Path:
     """News Site's folder: the /news site of sites.toml."""
@@ -115,8 +133,11 @@ def read_json(path: Path) -> dict:
 
 
 def library_folder(app: Path) -> Path:
-    configured = (read_json(app / "instance" / "collector.json").get("library_root")
-                  or read_json(app / "instance" / "settings.json").get("library_dir") or "")
+    configured = (
+        read_json(app / "instance" / "collector.json").get("library_root")
+        or read_json(app / "instance" / "settings.json").get("library_dir")
+        or ""
+    )
     folder = Path(configured).expanduser() if isinstance(configured, str) and configured.strip() else app / "articles"
     return folder if folder.is_dir() else app / "articles"
 
@@ -129,10 +150,12 @@ def collector_idle(lock: Path) -> bool:
         try:
             if os.name == "nt":
                 import msvcrt
+
                 msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
                 msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
             else:
                 import fcntl
+
                 fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
                 fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
         except OSError:
@@ -143,10 +166,18 @@ def collector_idle(lock: Path) -> bool:
 def stop_collection(app: Path) -> None:
     name = read_json(app / "instance" / "collector-task.json").get("task_name")
     if os.name == "nt" and name:
-        done = subprocess.run(["schtasks", "/Change", "/TN", name, "/DISABLE"], capture_output=True, text=True,
-                              errors="replace", creationflags=NO_WINDOW)
-        print(f"このPCの毎時の収集（{name}）を止めました。" if done.returncode == 0
-              else f"このPCの毎時の収集（{name}）を止められませんでした: {done.stderr.strip()}")
+        done = subprocess.run(
+            ["schtasks", "/Change", "/TN", name, "/DISABLE"],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            creationflags=NO_WINDOW,
+        )
+        print(
+            f"このPCの毎時の収集（{name}）を止めました。"
+            if done.returncode == 0
+            else f"このPCの毎時の収集（{name}）を止められませんでした: {done.stderr.strip()}"
+        )
     deadline = time.monotonic() + 30 * 60
     while not collector_idle(app / "instance" / "collector.lock"):
         if time.monotonic() > deadline:
@@ -166,12 +197,15 @@ def python_with_keyring(app: Path) -> list[str]:
 
 def read_secrets(app: Path) -> dict:
     """The API keys News Site keeps in the Windows credential store (through keyring, like News Site)."""
-    code = ("import json, keyring; print(json.dumps({n: keyring.get_password(%r, n) or '' for n in %r}))"
-            % (SECRET_SERVICE, SECRET_NAMES))
+    code = "import json, keyring; print(json.dumps({n: keyring.get_password(%r, n) or '' for n in %r}))" % (
+        SECRET_SERVICE,
+        SECRET_NAMES,
+    )
     for python in python_with_keyring(app):
         try:
-            out = subprocess.run([python, "-c", code], capture_output=True, text=True, timeout=60, check=True,
-                                 creationflags=NO_WINDOW).stdout
+            out = subprocess.run(
+                [python, "-c", code], capture_output=True, text=True, timeout=60, check=True, creationflags=NO_WINDOW
+            ).stdout
             secrets = json.loads(out.strip().splitlines()[-1])
         except (OSError, subprocess.SubprocessError, ValueError, IndexError):
             continue
@@ -184,8 +218,10 @@ def pack(app: Path, target: Path) -> None:
     instance = app / "instance"
     articles = library_folder(app)
     secrets = read_secrets(app)
-    with tempfile.TemporaryDirectory() as temporary, \
-            tarfile.open(target, "w:gz", compresslevel=6, format=tarfile.PAX_FORMAT) as tar:
+    with (
+        tempfile.TemporaryDirectory() as temporary,
+        tarfile.open(target, "w:gz", compresslevel=6, format=tarfile.PAX_FORMAT) as tar,
+    ):
         for path in sorted(instance.iterdir()):
             if not path.is_file() or path.name in SKIP or path.name.endswith(("-wal", "-shm", "-journal")):
                 continue
@@ -206,7 +242,7 @@ def pack(app: Path, target: Path) -> None:
             keys = Path(temporary) / "secrets.json"
             keys.write_text(json.dumps(secrets), encoding="utf-8")
             tar.add(keys, arcname="secrets.json")
-    print(f"詰めました: {target.stat().st_size / 1024 ** 2:.0f} MB（キー {', '.join(secrets) or 'なし'}）")
+    print(f"詰めました: {target.stat().st_size / 1024**2:.0f} MB（キー {', '.join(secrets) or 'なし'}）")
 
 
 def move_data(server: Server) -> None:
@@ -222,6 +258,7 @@ def move_data(server: Server) -> None:
 
 
 # -- this PC's server and its address ---------------------------------------------------------------
+
 
 def tailscale_cli() -> str | None:
     program_files = os.environ.get("ProgramFiles", r"C:\Program Files")
@@ -250,14 +287,27 @@ def own_name() -> str:
 def stop_pc_server() -> None:
     sys.path.insert(0, str(HOME))
     import launcher
+
     launcher.ensure_logon_task(False)
     if os.name == "nt":
-        listing = subprocess.run(["powershell", "-NoProfile", "-Command",
-                                  "Get-CimInstance Win32_Process | ForEach-Object { \"$($_.ProcessId)`t$($_.CommandLine)\" }"],
-                                 capture_output=True, text=True, errors="replace", creationflags=NO_WINDOW).stdout
+        listing = subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId)`t$($_.CommandLine)" }',
+            ],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            creationflags=NO_WINDOW,
+        ).stdout
         marks = [f"{str(HOME).casefold()}\\launcher.py", str(launcher.RUNTIME).casefold()]
-        pids = [int(pid) for pid, _, command in (line.partition("\t") for line in listing.splitlines())
-                if pid.isdecimal() and int(pid) != os.getpid() and any(mark in command.casefold() for mark in marks)]
+        pids = [
+            int(pid)
+            for pid, _, command in (line.partition("\t") for line in listing.splitlines())
+            if pid.isdecimal() and int(pid) != os.getpid() and any(mark in command.casefold() for mark in marks)
+        ]
         for pid in pids + launcher.python_site_servers():
             subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True, creationflags=NO_WINDOW)
         print(f"このPCのサーバーを止めました（{len(pids)} 個のプロセス）。ログオン時の自動起動も外しました。")
@@ -280,8 +330,10 @@ def hand_over_address(server: Server, new_address: bool) -> str:
             while own_name() == original and time.monotonic() < deadline:
                 time.sleep(3)
             if own_name() == original:
-                raise Stop(f"このPCの Tailscale での名前を {original}-pc に変えられませんでした。管理画面（Machines → このPC → "
-                           f"Edit machine name）で変えてから、--address-only を付けてもう一度実行してください。")
+                raise Stop(
+                    f"このPCの Tailscale での名前を {original}-pc に変えられませんでした。管理画面（Machines → このPC → "
+                    f"Edit machine name）で変えてから、--address-only を付けてもう一度実行してください。"
+                )
             print(f"このPCの Tailscale での名前を {original}-pc にしました。")
         quoted = shlex.quote(original)
         remote = f"sudo tailscale set --hostname={quoted} && sudo hostnamectl set-hostname {quoted} && {funnel}"
@@ -303,7 +355,9 @@ def wait_for(address: str) -> None:
         try:
             with urllib.request.urlopen(address, timeout=30) as answer:
                 if answer.status == 200:
-                    print(f"公開アドレスが答えています: {address}（Funnel で外にも公開済み。スマホのモバイル回線でも確かめてください）")
+                    print(
+                        f"公開アドレスが答えています: {address}（Funnel で外にも公開済み。スマホのモバイル回線でも確かめてください）"
+                    )
                     return
         except OSError:
             pass
@@ -312,10 +366,14 @@ def wait_for(address: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="py -3 deploy\\migrate.py", description="このPCのサイトをクラウドのサーバーへ移す")
+    parser = argparse.ArgumentParser(
+        prog="py -3 deploy\\migrate.py", description="このPCのサイトをクラウドのサーバーへ移す"
+    )
     parser.add_argument("--host", default="sites", help="サーバーの Tailscale での名前（既定: sites）")
     parser.add_argument("--user", default="ubuntu")
-    parser.add_argument("--new-address", action="store_true", help="このPCのアドレスを引き継がず、サーバー自身の名前で公開する")
+    parser.add_argument(
+        "--new-address", action="store_true", help="このPCのアドレスを引き継がず、サーバー自身の名前で公開する"
+    )
     parser.add_argument("--data-only", action="store_true", help="News Site のデータだけをもう一度送る")
     parser.add_argument("--address-only", action="store_true", help="このPCのサーバーを止めてアドレスを渡す手順だけ")
     args = parser.parse_args(argv)
@@ -324,10 +382,12 @@ def main(argv: list[str] | None = None) -> int:
         check_ssh(server)
         if not (args.data_only or args.address_only):
             set_up(server)
-            print("\nサーバーの準備ができました。ここからこのPCを変えます:\n"
-                  "  ・News Site の毎時の収集を止め、記事・DB・設定・API キーをサーバーへ送る\n"
-                  "  ・このPCのサーバーと自動起動、Funnel を止め、" +
-                  ("サーバーをサーバー自身の名前で公開する" if args.new_address else "今の公開アドレスをサーバーへ渡す"))
+            print(
+                "\nサーバーの準備ができました。ここからこのPCを変えます:\n"
+                "  ・News Site の毎時の収集を止め、記事・DB・設定・API キーをサーバーへ送る\n"
+                "  ・このPCのサーバーと自動起動、Funnel を止め、"
+                + ("サーバーをサーバー自身の名前で公開する" if args.new_address else "今の公開アドレスをサーバーへ渡す")
+            )
             if input("続けますか？ [y/N]: ").strip().lower() not in ("y", "yes"):
                 print("ここでやめました。続きは同じコマンドでいつでもできます。")
                 return 0
