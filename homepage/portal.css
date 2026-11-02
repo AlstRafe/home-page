@@ -12,8 +12,9 @@
   --mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
   --sans: "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
 }
+/* Dark: the device's setting unless the visitor chose with the header's button (<html data-theme>, set by the page's script). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --paper: #161513;
     --card: #201f1c;
     --ink: #ebe7df;
@@ -23,6 +24,20 @@
     --on-a: #141310;
     --warn: #f0b44c;
   }
+}
+:root[data-theme="dark"] {
+  --paper: #161513;
+  --card: #201f1c;
+  --ink: #ebe7df;
+  --soft: #a8a49b;
+  --rule: #3a3833;
+  --accent: #e06a60;
+  --on-a: #141310;
+  --warn: #f0b44c;
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
 }
 /* Fonts that have the language's own letters (Japanese fonts have no Hangul, and their kanji are not Taiwan's). */
 :lang(ko) {
@@ -63,27 +78,48 @@ html:lang(ko) body {
   --a: #55524c;
 }
 @media (prefers-color-scheme: dark) {
-  .accent-red {
+  :root:not([data-theme="light"]) .accent-red {
     --a: #e06a60;
   }
-  .accent-blue {
+  :root:not([data-theme="light"]) .accent-blue {
     --a: #7aa7f0;
   }
-  .accent-teal {
+  :root:not([data-theme="light"]) .accent-teal {
     --a: #38d6c4;
   }
-  .accent-green {
+  :root:not([data-theme="light"]) .accent-green {
     --a: #7cc47f;
   }
-  .accent-amber {
+  :root:not([data-theme="light"]) .accent-amber {
     --a: #f0b44c;
   }
-  .accent-purple {
+  :root:not([data-theme="light"]) .accent-purple {
     --a: #b794e6;
   }
-  .accent-gray {
+  :root:not([data-theme="light"]) .accent-gray {
     --a: #b3afa6;
   }
+}
+:root[data-theme="dark"] .accent-red {
+  --a: #e06a60;
+}
+:root[data-theme="dark"] .accent-blue {
+  --a: #7aa7f0;
+}
+:root[data-theme="dark"] .accent-teal {
+  --a: #38d6c4;
+}
+:root[data-theme="dark"] .accent-green {
+  --a: #7cc47f;
+}
+:root[data-theme="dark"] .accent-amber {
+  --a: #f0b44c;
+}
+:root[data-theme="dark"] .accent-purple {
+  --a: #b794e6;
+}
+:root[data-theme="dark"] .accent-gray {
+  --a: #b3afa6;
 }
 * {
   box-sizing: border-box;
@@ -122,6 +158,64 @@ header {
   font-size: 0.82rem;
   color: var(--soft);
   letter-spacing: 0.04em;
+}
+
+.tools {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: none;
+}
+/* The light/dark button: automatic (the device's setting) -> light -> dark, the same choice as News Site's and CoreLab's;
+   every state's icon and words are in the page and the current one is shown. */
+.theme {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.25rem;
+  padding: 0 0.8rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.theme:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.theme > span {
+  display: none;
+  align-items: center;
+  gap: 0.4rem;
+}
+:root:not([data-theme]) .t-auto,
+:root[data-theme="light"] .t-light,
+:root[data-theme="dark"] .t-dark {
+  display: inline-flex;
+}
+.theme svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+@media (max-width: 36rem) {
+  .theme {
+    padding: 0 0.6rem;
+  }
+  .theme .words {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 /* The language menu (the same on every site: a globe, the language in its own words, the four choices) */

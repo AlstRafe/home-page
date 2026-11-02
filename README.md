@@ -12,7 +12,7 @@ sites.toml            サーバー設定（[server]）と、一覧に並べる�
 launcher.py           起動役: 仮想環境の準備、ログオン時の自動起動、サーバーの見張りと再起動
 start.bat             launcher.py をダブルクリックで動かす
 homepage/server.py    サーバー本体（waitress）: 待ち受け、ホスト名の確認、テスト公開の https/noindex、自動再起動
-homepage/__init__.py  ポータル（WSGI）: 振り分け、一覧ページ、静的サイトの配信
+homepage/__init__.py  ポータル（WSGI）: 振り分け、一覧ページ、静的サイトの配信、ダーク/ライトの切り替え（THEME_SCRIPT。localStorage "theme" は News Site・CoreLab と共通）
 homepage/i18n.py      言語（日本語・한국어・English (UK)・中文（台灣））: 訪問者の選択、ブラウザの言語、言語メニュー、ページの文言
 homepage/page.html    一覧ページのひな形 / portal.css 見た目 / icons/*.svg アイコン / favicon.svg
 homepage/og.png       リンクを貼ったときのプレビュー画像（1200×630）/ apple-touch-icon.png ホーム画面のアイコン（180×180）
