@@ -362,7 +362,7 @@ name = "Gone"
         self.assertEqual(call(self.portal, "/news/a/7?tr=ja")[2], "news /news /a/7 GET")
         self.assertEqual(call(self.portal, "/news")[1]["Location"], "/news/")
         status, headers, _ = call(self.portal, "/a/7?tr=ja")
-        self.assertEqual((status, headers["Location"]), (308, "/news/a/7?tr=ja"))
+        self.assertEqual((status, headers["Location"]), (302, "/news/a/7?tr=ja"))  # not kept: /memo may come later
         self.assertEqual(call(self.portal, "/relay/v1/ping", method="POST")[2], "news  /relay/v1/ping POST")
         self.assertEqual(call(self.portal, "/api/saved", method="POST")[2], "news  /api/saved POST")
         robots = call(self.portal, "/robots.txt")[2]
@@ -511,6 +511,55 @@ name = "Gone"
         self.assertEqual(status, 404)
         self.assertIn("ページが見つかりません", page)
         self.assertNotIn("のトップへ", page)
+
+    def test_link_previews_and_the_home_screen_icon(self):
+        status, headers, page = call(self.portal, "/", host=PUBLIC, **{"wsgi.url_scheme": "https"})
+        self.assertEqual(status, 200)
+        image = re.search(r'<meta property="og:image" content="(https://[^"]+)">', page)
+        self.assertIsNotNone(image, page)
+        self.assertTrue(image.group(1).startswith(f"https://{PUBLIC}/og.png?v="))
+        self.assertIn('<meta name="twitter:card" content="summary_large_image">', page)
+        self.assertIn('<meta property="og:image:alt" content="サイト一覧: NewsBridge · CoreLab">', page)
+        touch = re.search(r'<link rel="apple-touch-icon" href="(/apple-touch-icon\.png\?v=\w+)">', page)
+        self.assertIsNotNone(touch, page)
+        for address, size in ((image.group(1).split(PUBLIC)[1], (1200, 630)), (touch.group(1), (180, 180))):
+            status, headers, body = call(self.portal, address, raw=True)
+            self.assertEqual((status, headers["Content-Type"]), (200, "image/png"), address)
+            self.assertEqual(headers["Cache-Control"], "public, max-age=31536000, immutable")
+            self.assertEqual(body[:8], b"\x89PNG\r\n\x1a\n")
+            self.assertEqual((int.from_bytes(body[16:20]), int.from_bytes(body[20:24])), size)  # IHDR
+        self.assertEqual(call(self.portal, "/apple-touch-icon.png")[1]["Cache-Control"], "public, max-age=86400")
+
+    def test_a_folder_sites_relative_share_links_are_completed(self):
+        (self.game / "og.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+        (self.game / "index.html").write_text(
+            '<!doctype html><title>CoreLab</title><meta property="og:url" content="./">'
+            '<meta property="og:image" content="og.png"><meta property="og:title" content="CoreLab">'
+            '<meta property="og:image" content="https://example.com/x.png"><body>' + "x" * 2000 + "</body>",
+            encoding="utf-8",
+        )
+        self.write(self.config.read_text(encoding="utf-8").replace('home_link = "own"\n', ""))
+        page = call(self.portal, "/infra/", host=PUBLIC, **{"wsgi.url_scheme": "https"})[2]
+        self.assertIn(f'<meta property="og:url" content="https://{PUBLIC}/infra/">', page)
+        self.assertIn(f'<meta property="og:image" content="https://{PUBLIC}/infra/og.png">', page)
+        self.assertIn('<meta property="og:image" content="https://example.com/x.png">', page)  # full already
+        self.assertIn("サイト一覧へ戻る", page)  # and the way back still comes
+        status, headers, body = call(self.portal, "/infra/", raw=True, HTTP_ACCEPT_ENCODING="gzip")
+        self.assertEqual((status, headers["Content-Encoding"]), (200, "gzip"))
+        self.assertIn(b'content="http://localhost/infra/og.png"', gzip.decompress(body))
+        self.assertNotEqual(call(self.portal, "/infra/", host=PUBLIC)[1]["ETag"], headers["ETag"].replace("-gz", ""))
+        for name in range(homepage.StaticFiles.GZIP_KEPT + 5):  # any *.ts.net name reaches the server
+            call(self.portal, "/infra/", host=f"n{name}.ts.net", HTTP_ACCEPT_ENCODING="gzip")
+        self.assertLessEqual(len(self.portal.sites[1].files._gzipped), homepage.StaticFiles.GZIP_KEPT)
+
+    def test_every_answer_says_what_the_browser_may_not_do(self):
+        for path in ("/", "/portal.css", "/og.png", "/infra/", "/infra/js/app.js"):
+            headers = call(self.portal, path)[1]
+            self.assertEqual(headers["X-Content-Type-Options"], "nosniff", path)
+            self.assertEqual(headers["X-Frame-Options"], "DENY", path)
+            self.assertEqual(headers["Cross-Origin-Opener-Policy"], "same-origin", path)
+            self.assertIn("camera=()", headers["Permissions-Policy"], path)
+            self.assertIn("frame-ancestors 'none'", headers["Content-Security-Policy"], path)
 
     def test_this_folders_own_sites_toml_reads_cleanly(self):
         from dataclasses import replace

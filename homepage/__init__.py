@@ -28,7 +28,7 @@ import tomllib
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urljoin
 
 from homepage import i18n
 
@@ -43,7 +43,23 @@ ACCENTS = ("red", "blue", "teal", "green", "amber", "purple", "gray")
 PAGE_TEXTS = ("title", "lead", "points", "about")
 SITE_TEXTS = ("name", "subtitle", "description", "tags", "open")
 #: The portal's own addresses: no site may be mounted over them.
-OWN = ("/", "/portal.css", "/favicon.svg", "/robots.txt")
+OWN = ("/", "/portal.css", "/favicon.svg", "/apple-touch-icon.png", "/og.png", "/robots.txt")
+#: Files of this package served as they are: address -> (file, type).
+FILES = {
+    "/favicon.svg": ("favicon.svg", "image/svg+xml"),
+    # The icon a phone puts on its home screen (iPhones also ask for it at this address by themselves).
+    "/apple-touch-icon.png": ("apple-touch-icon.png", "image/png"),
+    # The picture shown with a link to the list (LINE, X, Slack, KakaoTalk ...): 1200 x 630.
+    "/og.png": ("og.png", "image/png"),
+}
+#: What every page of the portal says about itself, the same as News Site's pages (newsreader/web/security.py).
+SECURITY_HEADERS = (
+    ("X-Content-Type-Options", "nosniff"),
+    ("Referrer-Policy", "same-origin"),
+    ("X-Frame-Options", "DENY"),
+    ("Cross-Origin-Opener-Policy", "same-origin"),
+    ("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()"),
+)
 #: How often sites.toml is looked at (it is re-read only when it changed).
 CHECK_SECONDS = 1.0
 #: How long a Python site's preview is shown before it is made again (in the background).
@@ -360,8 +376,12 @@ class Portal:
                     IMMUTABLE if current else "public, max-age=86400",
                     environ=environ,
                 )
-            if path == "/favicon.svg":
-                return _send(start_response, "image/svg+xml", _read(PACKAGE / "favicon.svg"), "public, max-age=86400")
+            if path in FILES:
+                name, kind = FILES[path]
+                current = environ.get("QUERY_STRING", "") == f"v={_version(PACKAGE / name)}"
+                return _send(
+                    start_response, kind, _read(PACKAGE / name), IMMUTABLE if current else "public, max-age=86400"
+                )
             if path == "/robots.txt":
                 return _send(
                     start_response, "text/plain; charset=utf-8", self.robots().encode(), "public, max-age=86400"
@@ -372,7 +392,9 @@ class Portal:
         if legacy is not None:
             if path.startswith(legacy.legacy) or method not in ("GET", "HEAD"):
                 return legacy.app(environ, start_response)
-            return _redirect(start_response, legacy.mount + path, environ, permanent=True)
+            # Not permanent: a browser keeps a permanent redirect for good, so an address that is
+            # unknown today (a typo, or a site added later) would keep going to News Site.
+            return _redirect(start_response, legacy.mount + path, environ)
         return _not_found(environ, start_response)
 
     def _visitor(self, environ) -> bool:
@@ -399,6 +421,7 @@ class Portal:
         scheme = environ.get("wsgi.url_scheme", "http")
         host = environ.get("HTTP_HOST", "") or environ.get("SERVER_NAME", "")
         home = environ.get("SCRIPT_NAME", "") + "/"
+        origin = f"{scheme}://{host}" if host else ""
         e = html.escape
         values = {
             "lang": lang,
@@ -406,9 +429,12 @@ class Portal:
             "menu": i18n.menu(lang),
             "title": e(title),
             "description": e(lead or title),
-            "url": e(f"{scheme}://{host}{quote(home)}") if host else "",
+            "url": e(f"{origin}{quote(home)}") if host else "",
+            "image": e(f"{origin}{quote(home)}og.png?v={_version(PACKAGE / 'og.png')}") if host else "",
+            "image_alt": e(f"{title}: " + " · ".join(site.say(lang, "name") for site in shown)),
             "css": e(f"{home}portal.css?v={_version(PACKAGE / 'portal.css')}"),
             "icon": e(f"{home}favicon.svg"),
+            "touch_icon": e(f"{home}apple-touch-icon.png?v={_version(PACKAGE / 'apple-touch-icon.png')}"),
             "date": e(i18n.date(lang, today)),
             "lead": f'<p class="lead">{e(lead)}</p>' if lead else "",
             "points": ('<ul class="points">' + "".join(f"<li>{e(p)}</li>" for p in points) + "</ul>") if points else "",
@@ -493,7 +519,10 @@ class StaticFiles:
     scripts). An HTML page's own scripts and styles are addressed with their version (``?v=``), and
     a file asked for at its current version may be kept for a year: the next visit asks for the
     page alone, not again for each of a game's dozens of scripts (each a trip over the Funnel to a
-    small server). A changed file gets a new version in the page, so it is fetched at once."""
+    small server). A changed file gets a new version in the page, so it is fetched at once.
+
+    A page's ``og:image`` and ``og:url`` may be written relative to it (``content="og.png"``): link
+    previews need full addresses, so they are completed with the address the visitor used."""
 
     TYPES = {
         ".html": "text/html; charset=utf-8",
@@ -528,10 +557,14 @@ class StaticFiles:
     NEWEST_FILES, NEWEST_SECONDS = 2000, 60.0
     #: Types sent gzipped (the rest are compressed already), from this size up.
     GZIP_TYPES = (".html", ".css", ".js", ".json", ".svg", ".wasm")
+    #: Compressed answers kept at most (any *.ts.net name reaches the server, so their number has a limit).
+    GZIP_KEPT = 512
     #: A page's own scripts and styles: ``<script src="...">`` and ``<link href="...">`` with a relative address.
     ASSET = re.compile(
         rb"""(<(?:script|link)\b[^>]*?\b(?:src|href)\s*=\s*)(["'])([^"'?#:<>\s/][^"'?#:<>\s]*)\2""", re.I
     )
+    #: ``<meta property="og:image" content="...">`` (or og:url) with an address that is not a full one.
+    SHARE = re.compile(rb"""(<meta\s+property="og:(?:image|url)"\s+content=")(?!https?:)([^"]*)(")""", re.I)
 
     def __init__(self, root: Path, allowed_hosts=None, home_link: bool = True):
         self.root = Path(root).resolve()
@@ -558,9 +591,15 @@ class StaticFiles:
         stamp = _stamp(file)
         is_page = kind.startswith("text/html")
         page, versions = self._page(file, stamp) if is_page else (None, "")
-        home = environ.get("homepage.home", "/") if self.home_link and is_page else ""
-        if home:  # the way back is in the visitor's language
-            home = f"{home}\n{i18n.chosen(environ)}"
+        # What a page gets on its way out: the way back to the list, in the visitor's language, and
+        # its relative share links completed with the address the visitor used.
+        back = environ.get("homepage.home", "/") if self.home_link and is_page else ""
+        made = (
+            back,
+            i18n.chosen(environ) if back else "",
+            _address(environ) if is_page and self.SHARE.search(page) else "",
+        )
+        home = "\n".join(made) if any(made) else ""
         packed = (
             file.suffix.lower() in self.GZIP_TYPES
             and stamp[1] >= GZIP_MIN
@@ -575,10 +614,9 @@ class StaticFiles:
             ("Last-Modified", _http_date(stamp[0])),
             ("Vary", "Accept-Encoding"),
             ("Content-Security-Policy", self.CSP),
-            ("X-Content-Type-Options", "nosniff"),
-            ("Referrer-Policy", "same-origin"),
+            *SECURITY_HEADERS,
         ]
-        if home:
+        if back:
             headers[4] = ("Vary", "Accept-Encoding, Cookie, Accept-Language")
         if tag in environ.get("HTTP_IF_NONE_MATCH", ""):
             start_response("304 Not Modified", headers)
@@ -630,19 +668,29 @@ class StaticFiles:
         return body, versions
 
     def _body(self, file: Path, home: str, page: bytes | None) -> bytes:
+        """``home``: "" for the file as it is, else "<the list's address>\\n<language>\\n<the page's
+        address>" (the way back, and the address relative share links are completed with; each may be "")."""
         body = page if page is not None else file.read_bytes()
-        return self._with_home_link(body, home) if home else body
+        if not home:
+            return body
+        back, lang, address = home.split("\n")
+        if address:
+            body = self.SHARE.sub(
+                lambda m: m.group(1) + html.escape(urljoin(address, m.group(2).decode())).encode() + m.group(3), body
+            )
+        return self._with_home_link(body, back, lang) if back else body
 
     def _gzip(self, file: Path, made_from: tuple, home: str, page: bytes | None) -> bytes:
         kept = self._gzipped.get((file, home))
         if kept and kept[0] == made_from:
             return kept[1]
         body = gzip.compress(self._body(file, home, page), compresslevel=6, mtime=0)
+        if len(self._gzipped) >= self.GZIP_KEPT:  # a page's copies differ by the name it was asked under
+            self._gzipped.clear()
         self._gzipped[(file, home)] = (made_from, body)
         return body
 
-    def _with_home_link(self, body: bytes, home: str) -> bytes:
-        home, _, lang = home.partition("\n")
+    def _with_home_link(self, body: bytes, home: str, lang: str) -> bytes:
         link = self.HOME_LINK.format(
             home=html.escape(home),
             title=html.escape(i18n.text(lang, "サイト一覧へ戻る")),
@@ -707,6 +755,13 @@ def _read(path: Path) -> bytes:
         body = b""
     _files[path] = (stamp, body)
     return body
+
+
+def _address(environ) -> str:
+    """The full address of this request, without its query (``https://name/infra/``)."""
+    host = environ.get("HTTP_HOST", "") or environ.get("SERVER_NAME", "")
+    path = quote(environ.get("SCRIPT_NAME", "") + environ.get("PATH_INFO", ""))
+    return f"{environ.get('wsgi.url_scheme', 'http')}://{host}{path}"
 
 
 def _http_date(mtime_ns: int) -> str:
@@ -810,8 +865,7 @@ def _headers(content_type: str, length: int, cache: str) -> list[tuple[str, str]
             "default-src 'none'; style-src 'self'; img-src 'self'; "
             "base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
         ),
-        ("X-Content-Type-Options", "nosniff"),
-        ("Referrer-Policy", "same-origin"),
+        *SECURITY_HEADERS,
     ]
 
 
@@ -882,11 +936,11 @@ def _plain(start_response, status: str, body: bytes):
     return [body]
 
 
-def _redirect(start_response, target: str, environ, permanent: bool = False, headers=()):
+def _redirect(start_response, target: str, environ, headers=()):
     query = environ.get("QUERY_STRING", "")
     location = quote(target, safe="/%:@!$&'()*+,;=-._~") + (f"?{query}" if query else "")
     start_response(
-        "308 Permanent Redirect" if permanent else "302 Found",
+        "302 Found",
         [("Location", location), ("Content-Length", "0"), *headers],
     )
     return [b""]
