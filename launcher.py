@@ -305,7 +305,7 @@ def take_over(port: int) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
-    if sys.version_info < (3, 11):
+    if sys.version_info < (3, 11):  # noqa: UP036 -- start.bat may find an older Python first
         print("Python 3.11 以上が必要です。", file=sys.stderr)
         return 1
     port, _ = server_settings()
@@ -335,7 +335,7 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except KeyboardInterrupt:
-        raise SystemExit(0)
+        raise SystemExit(0) from None
     except (OSError, subprocess.CalledProcessError) as error:
         print(f"起動できませんでした: {error}", file=sys.stderr)
-        raise SystemExit(1)
+        raise SystemExit(1) from None

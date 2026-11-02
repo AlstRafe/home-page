@@ -17,12 +17,12 @@ from __future__ import annotations
 import gzip
 import hashlib
 import html
+import inspect
 import json
 import os
 import re
 import threading
 import time
-import inspect
 import tomllib
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -90,7 +90,7 @@ class Site:
     listed: bool = True
     public: bool = True
     preview: object = None
-    files: "StaticFiles | None" = None
+    files: StaticFiles | None = None
     #: lang -> {"name": ..., "subtitle": ..., "description": ..., "tags": (...), "open": ...} from sites.toml.
     texts: dict = field(default_factory=dict)
     #: Seconds a preview is shown before it is made again (0: made for every request).
@@ -728,7 +728,7 @@ def _not_found(environ, start_response, site: str = ""):
             f'<link rel="stylesheet" href="{e(home)}portal.css"></head><body class="missing"><main>'
             f'<p class="date">{e(i18n.text(lang, "エラー {status}", status=404))}</p><h1>{heading}</h1>'
             f'<p class="lead">{e(i18n.text(lang, "アドレスが変わったか、なくなった可能性があります。"))}</p>'
-            f'<p class="go">{links}</p></main></body></html>').encode("utf-8")
+            f'<p class="go">{links}</p></main></body></html>').encode()
     return _send(start_response, "text/html; charset=utf-8", body, "no-cache", vary=True, status="404 Not Found",
                  environ=environ)
 

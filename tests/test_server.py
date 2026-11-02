@@ -2,19 +2,18 @@
 from __future__ import annotations
 
 import importlib.util
-import os
 import shutil
 import sys
 import tempfile
-import time
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from test_homepage import call
+
 import homepage
 from homepage import server
-from test_homepage import call
 
 FACTORY = '''
 def site(mount, host):

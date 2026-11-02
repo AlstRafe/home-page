@@ -1,0 +1,5 @@
+# Jinja-style template: Prettier does not know {{ }}.
+*.html
+# Patches handed to News Site stay exactly as they were sent.
+patches/
+instance/

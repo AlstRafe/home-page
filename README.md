@@ -22,6 +22,8 @@ patches/              News Site へ渡したパッチの控え
 instance/             server.log など（git 管理外）
 ```
 
+書式は News Site・Infra Game と同じ（1 行 120 字・ダブルクォート・LF。`.editorconfig`・`.prettierrc.json`・`ruff.toml` は各リポジトリで同じファイル）。VS Code は推奨拡張（EditorConfig・Ruff・Prettier ほか）を入れると保存時に整形する。コマンドでは `uvx ruff format .`・`uvx ruff check .`（Python）と `npx prettier@3.9.10 --write .`（CSS・Markdown。page.html と patches/ は対象外）。
+
 Python 3.11 以上。サーバー用の仮想環境は `%LOCALAPPDATA%\HomePage\venvs\<フォルダのハッシュ>`（waitress と、各 Python サイトの requirements.txt）。
 
 ## 起動と切り替え
