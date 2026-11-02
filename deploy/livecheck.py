@@ -1,7 +1,8 @@
-"""Is the public site up, and serving what master says? ``python deploy/livecheck.py [https://name]``
+"""Is the public site up, with every page a visitor needs? ``python deploy/livecheck.py [https://name]``
 
 Asks the public address (Tailscale Funnel) for each site's front page and the files link previews
-and phones use, the way a first-time visitor's browser would, and says what is missing or slow.
+and phones use, the way a first-time visitor's browser would, and says what is missing (and, as a
+warning, what was slow).
 GitHub Actions runs it every few hours and after each push to master (.github/workflows/live.yml),
 so a VM that stopped, a Funnel that went off or a deployment that broke a page shows up as a red
 run (and GitHub's e-mail) instead of a visitor finding it. Standard library only.
@@ -17,7 +18,8 @@ import urllib.error
 import urllib.request
 
 BASE = "https://haruxera.tail5d96b9.ts.net"
-#: A page slower than this is reported (the VM has 1/8 of a CPU, so a few seconds happen).
+#: A page slower than this is reported as a warning, not a failure (the VM has 1/8 of a CPU, so a few
+#: seconds happen now and then).
 SLOW_SECONDS = 8.0
 TIMEOUT = 30
 TRIES = 3
@@ -65,7 +67,8 @@ def check(base: str) -> list[str]:
         elif not headers.get("Content-Type", "").startswith(kind):
             problems.append(f"{path}: Content-Type {headers.get('Content-Type')}（{kind} のはず）")
         if seconds > SLOW_SECONDS:
-            problems.append(f"{path}: {seconds:.1f} 秒かかりました")
+            # a yellow note on the run (GitHub Actions reads this line), not a red run and an e-mail
+            print(f"::warning::{path}: {seconds:.1f} 秒かかりました")
         text = body.decode("utf-8", "replace") if kind.startswith(("text/", "application/json")) else ""
         for needed in texts:
             if needed not in text:
