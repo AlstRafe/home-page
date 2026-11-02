@@ -8,7 +8,7 @@ PC を切っても `/`・`/news`・`/infra` が動き続けるように、Oracle
 - **公開**: Tailscale Funnel（`https://<名前>.<tailnet>.ts.net/`）。ポート開放もドメインもいらない。移行のときに PC の今のアドレスを VM に引き継ぐので、配ったリンクはそのまま使える
 - **コード**: GitHub の `home-page`・`news-site`・`infra-game`。VM が 1 分ごとに見に行き、**master** に push されたものに切り替える（`update.sh`。リポジトリの既定ブランチではなく、いつも master）。サーバーは新しいコードで自分で再起動する
 - **データ**: News Site の DB・設定・記事は VM の中（`/srv/sites/News Site/work/app` の `instance/` と `articles/`）。git には入れない。毎時の収集も VM で動く。毎日 4:30 ごろ `instance/` を `/srv/sites/backup` に保存（14 日分）
-- **止められないために**: Always Free の VM は「7 日間、CPU・ネットワーク・メモリがどれも 20% 未満」だと Oracle に回収されることがある。`keepalive.py` がメモリの 25% と、10 分ごとに 90 秒の CPU を最低優先度で使う（サイトの処理がいつも先）
+- **止められないために**: Always Free の VM は「7 日間、CPU・ネットワーク・メモリがどれも 20% 未満」だと Oracle に回収されることがある。`keepalive.py` がメモリの 25%（4 GB 以上のとき）と、毎晩 3〜5 時（日本時間）の 2 時間だけ CPU を使う。日中は何もしない（1/8 OCPU の VM では、どんなに譲っても使った分だけサイトが遅くなるため）
 
 ## 初めてのとき（30 分ほど）
 

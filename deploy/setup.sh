@@ -160,6 +160,10 @@ units_stamp() {
   cat "$ROOT/Home Page/deploy/systemd/"* | sha256sum | cut -d' ' -f1
 }
 
+keepalive_stamp() {
+  sha256sum "$ROOT/Home Page/deploy/keepalive.py" | cut -d' ' -f1
+}
+
 install_units() {
   say "常駐の設定（systemd）"
   local unit
@@ -179,6 +183,10 @@ sync_changes() {
   if [ "$(cat "$STATE/units" 2>/dev/null)" != "$(units_stamp)" ]; then
     install_units
     systemctl try-restart homepage.service sites-keepalive.service
+  fi
+  if [ "$(cat "$STATE/keepalive" 2>/dev/null)" != "$(keepalive_stamp)" ]; then
+    systemctl try-restart sites-keepalive.service  # runs the new keepalive.py; the server is left alone
+    keepalive_stamp > "$STATE/keepalive"
   fi
   install_python_packages
   write_version
