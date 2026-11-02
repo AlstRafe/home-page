@@ -1,0 +1,29 @@
+# Is the public site answering? Asks it from outside, like a first-time visitor (deploy/livecheck.py).
+# A red run (GitHub e-mails the owner) means the VM, Funnel or the last push broke a page.
+name: Live site
+
+on:
+  schedule:
+    - cron: "17 */6 * * *" # every 6 hours (about 1 minute each, well inside the free minutes)
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Public pages
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - name: Give the VM time to take the push (it pulls master every minute, then restarts)
+        if: github.event_name == 'push'
+        run: sleep 150
+      - run: python3 -u deploy/livecheck.py

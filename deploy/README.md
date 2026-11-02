@@ -50,6 +50,7 @@ py -3 deploy\migrate.py
 - 記録: `journalctl -u homepage -u sites-update -u news-collector -n 50`
 - 持ち主向けのページ（一覧の「持ち主向け」欄、News Site の設定）: tailnet の端末から `http://<名前>:5000/`
 - 再起動: `sudo systemctl restart homepage`
+- 外からの見え方: GitHub Actions の **Live site** が 6 時間ごとと master への push の後に公開アドレスを開き、各サイトのトップ・リンクのプレビュー画像・セキュリティのヘッダを確かめる（`deploy/livecheck.py`。PC で `py -3 deploy\livecheck.py` でもよい）。赤くなると GitHub からメールが来る
 - News Site のデータだけ PC から送り直す: `py -3 deploy\migrate.py --host <名前> --data-only`（VM にあったデータは `/srv/sites/backup` に移る）
 - 設定の入れ直し（何度実行してもよい）: `sudo bash "/srv/sites/Home Page/deploy/setup.sh"`
 
@@ -70,6 +71,7 @@ update.sh                1 分ごとに GitHub から取り込む（sites-update
 import_news_data.py      PC から来た News Site のデータを取り込む
 backup.py                News Site の instance/ を毎日保存（sites-backup.timer）
 keepalive.py             Always Free の VM が回収されないように（sites-keepalive.service）
+livecheck.py             公開アドレスを外から確かめる（GitHub Actions の Live site）
 systemd/                 homepage.service（サーバー）、news-collector.timer（毎時の収集）ほか
 ```
 
