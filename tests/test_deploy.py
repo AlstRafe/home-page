@@ -3,6 +3,7 @@ Run: python -m unittest discover -s tests"""
 
 from __future__ import annotations
 
+import calendar
 import json
 import sqlite3
 import sys
@@ -150,10 +151,25 @@ class KeepaliveTest(unittest.TestCase):
             mock.patch.object(keepalive, "YIELD", 0.01),
             mock.patch.object(keepalive.time, "sleep") as slept,
         ):
-            keepalive.busy(0.05)
+            keepalive.busy(0.05, cpus=1)
         self.assertEqual(slept.call_count, 3)  # once for each look that found the sites busy
         with mock.patch("builtins.open", side_effect=OSError):
             self.assertFalse(keepalive.others_running())  # no /proc (not Linux): just work
+        with mock.patch("builtins.open", side_effect=lambda *a, **k: __import__("io").StringIO("0 0 0 2/180 1\n")):
+            self.assertFalse(keepalive.others_running(own=2))  # its two workers alone
+            self.assertTrue(keepalive.others_running(own=1))
+
+    def test_it_works_only_during_the_night_hours(self):
+        at = lambda hour, minute=0: calendar.timegm((2026, 11, 2, hour, minute, 0))
+        night = keepalive.hours(keepalive.NIGHT)
+        self.assertEqual(night, {18, 19})  # 03:00-05:00 in Japan
+        self.assertEqual(keepalive.work_seconds(at(17, 59), night), 0)
+        self.assertEqual(keepalive.work_seconds(at(18), night), 2 * 3600)
+        self.assertEqual(keepalive.work_seconds(at(19, 30), night), 1800)
+        self.assertEqual(keepalive.work_seconds(at(20), night), 0)
+        self.assertEqual(keepalive.work_seconds(at(0, 30), keepalive.hours("23-1")), 1800)
+        self.assertEqual(keepalive.hours(""), set())  # never
+        self.assertEqual(keepalive.hours("night"), set())
 
 
 if __name__ == "__main__":
