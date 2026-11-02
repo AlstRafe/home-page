@@ -15,6 +15,7 @@ homepage/server.py    サーバー本体（waitress）: 待ち受け、ホスト
 homepage/__init__.py  ポータル（WSGI）: 振り分け、一覧ページ、静的サイトの配信
 homepage/i18n.py      言語（日本語・한국어・English (UK)・中文（台灣））: 訪問者の選択、ブラウザの言語、言語メニュー、ページの文言
 homepage/page.html    一覧ページのひな形 / portal.css 見た目 / icons/*.svg アイコン / favicon.svg
+homepage/og.png       リンクを貼ったときのプレビュー画像（1200×630）/ apple-touch-icon.png ホーム画面のアイコン（180×180）
 homepage/__main__.py  python -m homepage --demo: 一覧の見た目だけを試す小さなサーバー
 tests/                python -m unittest discover -s tests
 deploy/               クラウドの VM で配信する: 準備（setup.sh）、GitHub からの自動反映（update.sh）、PC からの移行（migrate.py）
@@ -23,6 +24,8 @@ instance/             server.log など（git 管理外）
 ```
 
 書式は News Site・Infra Game と同じ（1 行 120 字・ダブルクォート・LF。`.editorconfig`・`.prettierrc.json`・`ruff.toml` は各リポジトリで同じファイル）。VS Code は推奨拡張（EditorConfig・Ruff・Prettier ほか）を入れると保存時に整形する。コマンドでは `uvx ruff format .`・`uvx ruff check .`（Python）と `npx prettier@3.9.10 --write .`（CSS・Markdown。page.html と patches/ は対象外）。
+
+GitHub に push すると Actions（`.github/workflows/ci.yml`）がテスト（Ubuntu と Windows）・Ruff・Prettier・ShellCheck を通す。VM は master を 1 分以内に配信するので、赤くなったらすぐ直す。
 
 Python 3.11 以上。サーバー用の仮想環境は `%LOCALAPPDATA%\HomePage\venvs\<フォルダのハッシュ>`（waitress と、各 Python サイトの requirements.txt）。
 
@@ -58,6 +61,7 @@ name = "Memo"
 - 静的ファイルには ETag を付け、変わっていなければ 304（中身なし）で返す。1KB 以上のテキスト（html・css・js・json・svg・wasm）は gzip で送る（CoreLab のスクリプト約 1.2MB が 2 回目以降はほぼ 0、初回も約 1/5）
 - `preview = "portal.json"` で、サイトのフォルダにある JSON の中身をカードに並べる（`{"title": "見出し", "items": [["文", "/サイト内のパス"], ...]}`、最大 5 件、サイト内のパスだけ）。JSON を書き換えると一覧に即反映。CoreLab は「すぐ遊べるミッション」を Infra Game 側の portal.json で持つ
 - 「← サイト一覧」へ戻るリンクは、サイトが自前で持っていなければポータルが各 HTML の左下に自動で付ける（自前で持つなら `home_link = "own"`）
+- HTML の `og:image`・`og:url` は相対で書いてよい（`content="og.png"`）。リンクのプレビューには完全なアドレスが要るので、ポータルが訪問者の使ったアドレスで補う（CoreLab の og.png）
 - `public = false` でテスト公開（Funnel）の名前からは隠す。このPC・LAN からは見えるので、公開前の確認に使える
 - 書き間違いや読み込めなかったサイトは、このPCから一覧を開いたときだけページ下の「このPCの持ち主向け」欄に理由が出る
 - Python の Web アプリは `python = "フォルダ"` と `entry = "モジュール:関数"` で足す。関数は `site(mount=..., host={...})` で `{"app": WSGIアプリ, "name", "subtitle", "preview", "disallow", "legacy", "version"}` を返す（homepage/server.py の説明、News Site の newsreader/hosting.py が実例）
@@ -86,7 +90,7 @@ python -m homepage --demo
 - News Site は sites.toml の `python = "../News Site/work/app"`、`entry = "newsreader.hosting:site"` でこのサーバーに読み込まれる（同じプロセスで動く）
 - 読み込まれた News Site は、自分のログオン時の自動起動を外し、`instance\hosted.json` に配信先を書く。News Site の launcher.py は、このサーバーが動いていれば2台目を起動せずにここを開く
 - News Site 単体（他のPC・テスト版）は今までどおり自分で起動し、`/` は `/news/` へ転送される
-- 旧アドレス（`/a/123` など）は `/news/…` へ 308 転送、`/relay/…` はそのまま News Site が答える
+- 旧アドレス（`/a/123` など）は `/news/…` へ 302 転送、`/relay/…` はそのまま News Site が答える（恒久的な 308 にしないのは、ブラウザがそれを覚え続け、あとで足したサイトのアドレスまで News Site へ行ってしまうため）
 - `News Site\work\app` には直接コミットしない。News Site 側の変更はパッチにして News Site プロジェクトに取り込んでもらう
 
 ## パッチ
@@ -95,4 +99,4 @@ News Site へ渡したパッチの控えは `patches/` にある（どれも取�
 
 ## 今後の候補
 
-- 一覧ページの OGP 画像（リンクを貼ったときのプレビュー）
+- サイトを足したら og.png（一覧のプレビュー画像。いまは NewsBridge と CoreLab のカード）も作り直す
