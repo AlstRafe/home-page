@@ -8,6 +8,11 @@ on:
   push:
     branches: [master]
   workflow_dispatch:
+    inputs:
+      url:
+        description: "Address to check instead of the usual one (https://name)"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -26,4 +31,6 @@ jobs:
       - name: Give the VM time to take the push (it pulls master every minute, then restarts)
         if: github.event_name == 'push'
         run: sleep 150
-      - run: python3 -u deploy/livecheck.py
+      - run: python3 -u deploy/livecheck.py ${URL:+"$URL"}
+        env:
+          URL: ${{ inputs.url }}

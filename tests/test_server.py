@@ -134,6 +134,74 @@ entry = "nothing:site"
         self.assertEqual(seen["scheme"], "http")
         self.assertNotIn("X-Robots-Tag", headers)
 
+    def test_the_machines_own_public_domain_is_a_visitors_address(self):
+        text = self.config.read_text(encoding="utf-8")
+        self.assertEqual(
+            (server.read_settings(self.config).public, server.read_settings(self.config).moved_to), ((), "")
+        )
+        self.config.write_text(
+            text.replace(
+                "[server]\n",
+                '[server]\npublic = [" Sites.DuckDNS.org.", "", 5, "sites.duckdns.org:443"]\nmoved_to = "sites.duckdns.org"\n',
+            ),
+            encoding="utf-8",
+        )
+        settings = server.read_settings(self.config)
+        self.assertEqual((settings.public, settings.moved_to), (("sites.duckdns.org",), "sites.duckdns.org"))
+        self.config.write_text(
+            text.replace("[server]\n", '[server]\nmoved_to = "elsewhere.example"\n'), encoding="utf-8"
+        )
+        self.assertEqual(server.read_settings(self.config).moved_to, "")  # only to a name it serves
+        names = server.Hosts(["100.70.1.2", "haruxera"], ["sites.duckdns.org", "haruxera"])
+        self.assertTrue(names.allowed("sites.duckdns.org"))
+        self.assertTrue(names.visitor("SITES.duckdns.org:443"))
+        self.assertFalse(names.visitor("haruxera"))  # an own name never becomes a visitor's
+        self.assertNotIn("sites.duckdns.org", names.names)  # the sites are told to trust the own names only
+        self.assertFalse(names.allowed("other.duckdns.org"))
+        seen = {}
+
+        def app(environ, start_response):
+            seen.update(scheme=environ["wsgi.url_scheme"], visitor=environ.get(server.VISITOR_KEY))
+            start_response("200 OK", [])
+            return [b""]
+
+        wrapped = server.Public(app, names.visitor)
+        call(wrapped, "/news/", host="sites.duckdns.org")
+        self.assertEqual(seen, {"scheme": "https", "visitor": True})
+        call(wrapped, "/news/", host="haruxera")
+        self.assertEqual(seen, {"scheme": "http", "visitor": None})
+
+    def test_the_old_public_address_sends_pages_on_to_the_new_one(self):
+        names = server.Hosts(["haruxera"], ["sites.duckdns.org"])
+        served = []
+
+        def app(environ, start_response):
+            served.append((environ["HTTP_HOST"], environ["REQUEST_METHOD"]))
+            start_response("200 OK", [])
+            return [b""]
+
+        wrapped = server.Public(app, names.visitor, "sites.duckdns.org")
+        status, headers, _ = call(wrapped, "/news/a/1?lang=ko", host="haruxera.tail1234.ts.net")
+        self.assertEqual((status, headers["Location"]), (307, "https://sites.duckdns.org/news/a/1?lang=ko"))
+        self.assertIn("max-age=", headers["Strict-Transport-Security"])
+        path = "/news/?q=" + "東京".encode().decode("latin-1")  # WSGI: the path's bytes as latin-1
+        status, headers, _ = call(wrapped, path.replace("?q=", "x"), "HEAD", host="haruxera.tail1234.ts.net")
+        self.assertEqual(headers["Location"], "https://sites.duckdns.org/news/x%E6%9D%B1%E4%BA%AC")
+        self.assertEqual(
+            call(wrapped, "", host="haruxera.tail1234.ts.net")[1]["Location"], "https://sites.duckdns.org/"
+        )
+        self.assertEqual(call(wrapped, "/news/relay/translate", "POST", host="haruxera.tail1234.ts.net")[0], 200)
+        self.assertEqual(call(wrapped, "/", host="sites.duckdns.org")[0], 200)
+        self.assertEqual(call(wrapped, "/", host="haruxera")[0], 200)  # the owner's own names stay as they are
+        self.assertEqual(
+            served,
+            [
+                ("haruxera.tail1234.ts.net", "POST"),
+                ("sites.duckdns.org", "GET"),
+                ("haruxera", "GET"),
+            ],
+        )
+
 
 class LauncherTests(unittest.TestCase):
     def setUp(self):

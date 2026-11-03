@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # Sets this Linux server up as the server of the sites: Home Page (the site list and the server
 # itself), News Site under /news and Infra Game (CoreLab) under /infra, each cloned from its GitHub
-# repository, served on https://<this machine>.<tailnet>.ts.net/ through Tailscale Funnel.
+# repository, served on https://<this machine>.<tailnet>.ts.net/ through Tailscale Funnel, or straight
+# from this machine on its own DuckDNS name (--direct).
 #
 #   sudo bash setup.sh                  first time, and again after adding the deploy keys it prints
 #   sudo bash setup.sh --import FILE    take in News Site's data from the PC (made by migrate.py)
 #   sudo bash setup.sh --units          reinstall the systemd units only (update.sh does this when deploy/ changed)
 #   sudo bash setup.sh --funnel         publish port 5000 again (after the machine was renamed)
+#   sudo bash setup.sh --direct NAME    serve https://NAME.duckdns.org/ from here too (Caddy); sites.toml [server]
+#                                       public names it for the server, moved_to sends the Funnel name's pages there
 #   sudo bash setup.sh --sync           what update.sh runs after pulling (units, packages, VERSION as needed)
 #
 # Safe to run again: whatever is in place already is kept. Ubuntu 22.04 or newer.
@@ -21,6 +24,7 @@ ACCOUNT=sites
 VENV="$ROOT/venv"
 STATE="$ROOT/state"
 PORT=5000
+DIRECT=/etc/sites  # --direct: the DuckDNS name and its token (root only)
 PACKAGES=("waitress>=3.0,<4" "keyrings.alt>=5,<6")
 export PYTHON_KEYRING_BACKEND=keyrings.alt.file.PlaintextKeyring
 
@@ -172,7 +176,7 @@ install_units() {
   done
   systemctl daemon-reload
   systemctl enable --now homepage.service sites-keepalive.service \
-    sites-update.timer news-collector.timer sites-backup.timer
+    sites-update.timer news-collector.timer sites-backup.timer sites-duckdns.timer
   units_stamp > "$STATE/units"
 }
 
@@ -190,6 +194,96 @@ sync_changes() {
   fi
   install_python_packages
   write_version
+  if [ -f "$DIRECT/duckdns" ] && render_caddyfile; then
+    systemctl reload caddy || systemctl restart caddy
+  fi
+}
+
+direct_domain() {
+  sed -n 's/^DOMAIN=//p' "$DIRECT/duckdns" 2>/dev/null | head -n 1
+}
+
+# The address Caddy listens on: the one the default route leaves from (the VM's own, not tailscale0's).
+own_address() {
+  ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p' | head -n 1
+}
+
+# /etc/caddy/Caddyfile from deploy/Caddyfile. Succeeds only when that changed the file.
+render_caddyfile() {
+  local name bind target=/etc/caddy/Caddyfile
+  name="$(direct_domain).duckdns.org"
+  bind="$(own_address)"
+  [ -n "$bind" ] || { echo "この VM のアドレスが分かりません" >&2; return 1; }
+  sed -e "s/@NAME@/$name/g" -e "s/@BIND@/$bind/g" "$ROOT/Home Page/deploy/Caddyfile" > "$target.new"
+  if cmp -s "$target.new" "$target"; then
+    rm -f "$target.new"
+    return 1
+  fi
+  mv "$target.new" "$target"
+}
+
+# Oracle's Ubuntu images let in port 22 only (iptables, saved in /etc/iptables/rules.v4): 80 (the
+# certificate's check, then a redirect) and 443 go next to it, now and after a reboot.
+open_web_ports() {
+  local port at rules=/etc/iptables/rules.v4
+  for port in 80 443; do
+    if ! iptables -C INPUT -p tcp -m state --state NEW -m tcp --dport "$port" -j ACCEPT 2>/dev/null; then
+      at="$(iptables -L INPUT -n --line-numbers | awk '/dpt:22( |$)/ {print $1 + 1; exit}')"
+      iptables -I INPUT "${at:-1}" -p tcp -m state --state NEW -m tcp --dport "$port" -j ACCEPT
+    fi
+    if [ -f "$rules" ] && ! grep -q -- "--dport $port -j ACCEPT" "$rules"; then
+      sed -i "/--dport 22 -j ACCEPT/a -A INPUT -p tcp -m state --state NEW -m tcp --dport $port -j ACCEPT" "$rules"
+    fi
+  done
+}
+
+direct() {
+  local name="${1%.duckdns.org}" token="${DUCKDNS_TOKEN:-}" domain address _
+  name="${name,,}"
+  [[ "$name" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]] || { echo "DuckDNS のサブドメイン名を指定してください（例: --direct haruxera）" >&2; exit 2; }
+  domain="$name.duckdns.org"
+  say "直接配信: https://$domain/"
+  install -d -m 700 "$DIRECT"
+  if [ -z "$token" ] && [ "$(direct_domain)" = "$name" ]; then
+    token="$(sed -n 's/^TOKEN=//p' "$DIRECT/duckdns")"
+  fi
+  if [ -z "$token" ]; then
+    read -rsp "DuckDNS の token（duckdns.org の画面上部。貼っても表示されません）: " token
+    echo
+  fi
+  [[ "$token" =~ ^[A-Za-z0-9-]+$ ]] || { echo "token の形が違います" >&2; exit 2; }
+  printf 'DOMAIN=%s\nTOKEN=%s\n' "$name" "$token" > "$DIRECT/duckdns.new"
+  chmod 600 "$DIRECT/duckdns.new"
+  mv "$DIRECT/duckdns.new" "$DIRECT/duckdns"
+  bash "$ROOT/Home Page/deploy/duckdns.sh"
+  address="$(curl -fsS -4 -m 10 https://ifconfig.me || true)"
+  echo "DuckDNS: $domain -> ${address:-この VM}"
+
+  export DEBIAN_FRONTEND=noninteractive
+  command -v caddy >/dev/null || apt-get -o DPkg::Lock::Timeout=600 install -y -q caddy
+  render_caddyfile || true
+  open_web_ports
+  systemctl enable caddy >/dev/null 2>&1
+  systemctl restart caddy
+
+  echo "証明書を取っています（Oracle のセキュリティ・リストで 80 と 443 が開いていること）…"
+  for _ in $(seq 60); do
+    # Any answer over verified TLS means Caddy has the certificate (Let's Encrypt reached this VM).
+    if curl -s -o /dev/null -m 10 --resolve "$domain:443:$(own_address)" "https://$domain/robots.txt"; then
+      break
+    fi
+    sleep 5
+  done
+  if ! curl -s -o /dev/null -m 10 --resolve "$domain:443:$(own_address)" "https://$domain/robots.txt"; then
+    echo "証明書が取れませんでした。Oracle のセキュリティ・リストに 80 と 443（TCP、0.0.0.0/0）を足してから" \
+      "もう一度どうぞ。今までの Funnel のアドレスはそのまま動いています。記録: journalctl -u caddy -n 30" >&2
+    exit 1
+  fi
+  if [ "$(curl -s -o /dev/null -w '%{http_code}' -m 10 --resolve "$domain:443:$(own_address)" "https://$domain/news/")" = 200 ]; then
+    echo "公開アドレス: https://$domain/"
+  else
+    echo "証明書は取れました。サーバーがこの名前に答えるのは、sites.toml の [server] public に $domain が入ってからです。"
+  fi
 }
 
 public_name() {
@@ -253,10 +347,11 @@ main() {
   case "${1:-}" in
     --units) install_units; return ;;
     --funnel) publish; return ;;
+    --direct) direct "${2:-}"; return ;;
     --sync) sync_changes; return ;;
     --import) import_data "${2:?取り込むファイルを指定してください}"; wait_until_answering; return ;;
     "") ;;
-    *) echo "使い方: sudo bash setup.sh [--import FILE | --units | --funnel | --sync]" >&2; exit 2 ;;
+    *) echo "使い方: sudo bash setup.sh [--import FILE | --units | --funnel | --direct NAME | --sync]" >&2; exit 2 ;;
   esac
   install_packages
   add_swap
