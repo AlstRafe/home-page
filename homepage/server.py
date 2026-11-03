@@ -32,6 +32,7 @@ import socket
 import subprocess
 import sys
 import threading
+import time
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -45,6 +46,8 @@ POLL_SECONDS = 15.0
 #: Every this many polls (about a minute), look for a network address that came up.
 NETWORK_POLL_ROUNDS = 4
 THREADS = 16
+#: How long a restart waits for the requests being answered.
+DRAIN_SECONDS = 20.0
 FUNNEL_SUFFIX = ".ts.net"
 #: The login form's size at most.
 FORM_BYTES = 4096
@@ -394,25 +397,53 @@ def _listen_spec(hosts: list[str], port: int) -> str:
 
 
 def serve(
-    app, hosts: list[str], port: int, *, supervised: bool, reason=None, poll_seconds: float = POLL_SECONDS
+    app,
+    hosts: list[str],
+    port: int,
+    *,
+    supervised: bool,
+    reason=None,
+    poll_seconds: float = POLL_SECONDS,
+    drain_seconds: float = DRAIN_SECONDS,
 ) -> int:
-    """Serve until stopped (0) or, supervised, until ``reason(round)`` names a reason to restart (75)."""
+    """Serve until stopped (0) or, supervised, until ``reason(round)`` names a reason to restart (75).
+
+    A restart first stops taking connections, lets the requests being answered finish (at most
+    ``drain_seconds``), then closes the rest (idle keep-alive connections: Caddy and Funnel open new
+    ones) and returns. Each listener's trigger, which a finished request pulls to have its answer
+    sent, stays open until then: waitress's own listener close() shuts it too, and the answers in
+    flight were never sent (Errno 9), so the old server kept its connections, and the port stayed
+    closed, until every client gave up (9 minutes on 2026-11-03)."""
+    from waitress import wasyncore
+    from waitress.channel import HTTPChannel
     from waitress.server import BaseWSGIServer, create_server
 
     if not _bindable(LOOPBACK, port) and LOOPBACK in hosts:
         raise OSError(f"ポート {port} はこのPCでほかのプログラムが使っています（もう起動していませんか）。")
     hosts = [item for item in hosts if item == LOOPBACK or _bindable(item, port)]
     server = create_server(app, listen=_listen_spec(hosts, port), threads=THREADS, ident="HomePage")
+    single = isinstance(server, BaseWSGIServer)
+    everything = server._map if single else server.map  # listeners, their triggers, the connections
     listeners = (
         [server]
-        if isinstance(server, BaseWSGIServer)
-        else list({id(item): item for item in server.map.values() if isinstance(item, BaseWSGIServer)}.values())
+        if single
+        else list({id(item): item for item in everything.values() if isinstance(item, BaseWSGIServer)}.values())
     )
     restarting = threading.Event()
 
-    def close_listeners() -> None:
+    def stop_taking() -> None:  # on the loop thread, like every change to the connections
         for listener in listeners:
-            listener.close()
+            wasyncore.dispatcher.close(listener)  # the socket only: not BaseWSGIServer.close(), which shuts the trigger
+
+    def busy() -> bool:
+        return any(
+            item.requests or item.total_outbufs_len
+            for item in list(everything.values())
+            if isinstance(item, HTTPChannel)
+        )
+
+    def finish() -> None:  # on the loop thread: an empty map ends the loop
+        wasyncore.close_all(everything)
 
     def watch() -> None:
         rounds = 0
@@ -422,9 +453,11 @@ def serve(
             if why:
                 print(f"{why}。処理中の要求を終えてから再起動します。", flush=True)
                 restarting.set()
-                # close() must run on the server's own loop thread; the loop then ends once the
-                # connections still open have been answered.
-                listeners[0].trigger.pull_trigger(close_listeners)
+                listeners[0].trigger.pull_trigger(stop_taking)
+                until = time.monotonic() + drain_seconds
+                while time.monotonic() < until and busy():
+                    time.sleep(0.05)
+                listeners[0].trigger.pull_trigger(finish)
                 return
 
     if supervised:
