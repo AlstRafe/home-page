@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import http.client
 import importlib.util
 import io
 import shutil
+import socket
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
 from urllib.parse import urlencode
@@ -203,6 +207,63 @@ entry = "nothing:site"
                 ("haruxera", "GET"),
             ],
         )
+
+
+@unittest.skipUnless(importlib.util.find_spec("waitress"), "waitress is not installed (CI installs it)")
+class RestartTests(unittest.TestCase):
+    """A restart (new code, settings) lets the answers in flight go out and ends at once."""
+
+    def test_a_restart_finishes_the_requests_being_answered_and_ends_soon(self):
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+        started, asked = threading.Event(), threading.Event()
+
+        def app(environ, start_response):
+            if environ["PATH_INFO"] == "/slow":
+                started.set()
+                time.sleep(0.6)
+            body = environ["PATH_INFO"].encode() * 2000
+            start_response("200 OK", [("Content-Type", "text/plain"), ("Content-Length", str(len(body)))])
+            return [body]
+
+        result = {}
+
+        def run():
+            result["code"] = server.serve(
+                app,
+                ["127.0.0.1"],
+                port,
+                supervised=True,
+                reason=lambda rounds: "テスト" if asked.is_set() else None,
+                poll_seconds=0.05,
+                drain_seconds=5,
+            )
+
+        thread = threading.Thread(target=run, daemon=True)
+        thread.start()
+        for _ in range(100):
+            try:
+                idle = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+                idle.request("GET", "/quick")
+                break
+            except OSError:
+                time.sleep(0.05)
+        self.assertEqual(idle.getresponse().read(), b"/quick" * 2000)  # left open: an idle keep-alive one
+        slow = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+        slow.request("GET", "/slow")
+        self.assertTrue(started.wait(5))
+        asked.set()
+        began = time.monotonic()
+        self.assertEqual(slow.getresponse().read(), b"/slow" * 2000)  # answered in full
+        thread.join(5)
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(result["code"], server.RESTART_EXIT_CODE)
+        self.assertLess(time.monotonic() - began, 3)  # not held up by the idle connection
+        with self.assertRaises(OSError):
+            socket.create_connection(("127.0.0.1", port), timeout=1).close()
+        idle.close()
+        slow.close()
 
 
 class OwnerTests(unittest.TestCase):
