@@ -33,7 +33,7 @@ listen = "network"   # "network": Tailscale・LAN・このPC / "local": このPC
 # hosts = ["mypc.local"]   # ほかに受け付けるホスト名（このPCの名前・アドレス・*.ts.net は自動）
 # 公開の名前（訪問者として扱う。*.ts.net は自動）。VM が Caddy で直接配信する DuckDNS の名前（setup.sh --direct）
 public = ["haruxera.duckdns.org"]
-# moved_to = "haruxera.duckdns.org"   # 公開の名前のうちこれ以外（Funnel）で開かれたページを、ここへ転送する
+moved_to = "haruxera.duckdns.org"   # 公開の名前のうちこれ以外（Funnel）で開かれたページを、ここへ転送する
 
 # ── サイトの足し方 ─────────────────────────────────────────────
 # 静的ファイル（index.html のあるフォルダ）なら、次の形の [[site]] を1つ足すだけ:

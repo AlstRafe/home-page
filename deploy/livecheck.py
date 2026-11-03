@@ -1,8 +1,8 @@
 """Is the public site up, with every page a visitor needs? ``python deploy/livecheck.py [https://name]``
 
-Asks the public address (Tailscale Funnel) for each site's front page and the files link previews
-and phones use, the way a first-time visitor's browser would, and says what is missing (and, as a
-warning, what was slow).
+Asks the public address (the VM's own name, served by Caddy) for each site's front page and the files
+link previews and phones use, the way a first-time visitor's browser would, and says what is missing
+(and, as a warning, what was slow). The old address (Tailscale Funnel) must send pages there.
 GitHub Actions runs it every few hours and after each push to master (.github/workflows/live.yml),
 so a VM that stopped, a Funnel that went off or a deployment that broke a page shows up as a red
 run (and GitHub's e-mail) instead of a visitor finding it. Standard library only.
@@ -17,7 +17,9 @@ import time
 import urllib.error
 import urllib.request
 
-BASE = "https://haruxera.tail5d96b9.ts.net"
+BASE = "https://haruxera.duckdns.org"
+#: The address the links people were sent use (Funnel): it answers a page with a redirect to BASE.
+OLD = "https://haruxera.tail5d96b9.ts.net"
 #: A page slower than this is reported as a warning, not a failure (the VM has 1/8 of a CPU, so a few
 #: seconds happen now and then).
 SLOW_SECONDS = 8.0
@@ -44,6 +46,28 @@ def fetch(url: str) -> tuple[int, dict, bytes, float]:
             body = gzip.decompress(body)
         return status, headers, body, time.monotonic() - start
     raise ConnectionError(f"{url}: {last}")
+
+
+class _Stay(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None  # the redirect itself is the answer
+
+
+def moved(old: str, base: str, path: str = "/news/?q=check") -> list[str]:
+    """Whether the old address sends a page to the same path at ``base``."""
+    opener = urllib.request.build_opener(_Stay)
+    start = time.monotonic()
+    try:
+        opener.open(urllib.request.Request(old + path, headers=HEADERS), timeout=TIMEOUT)
+        return [f"{old}{path}: 転送されません"]
+    except urllib.error.HTTPError as error:
+        status, location = error.code, error.headers.get("Location", "")
+    except (urllib.error.URLError, TimeoutError, OSError) as error:
+        return [f"{old}{path}: 答えがありません（{error}）"]
+    print(f"{status} {time.monotonic() - start:5.2f}s      {old}{path} -> {location}")
+    if status not in (301, 302, 307, 308) or location != base + path:
+        return [f"{old}{path}: {status} {location!r}（{base}{path} への転送のはず）"]
+    return []
 
 
 def meta(page: str, name: str) -> str:
@@ -97,6 +121,8 @@ def check(base: str) -> list[str]:
 def main(argv: list[str]) -> int:
     base = (argv[0] if argv else BASE).rstrip("/")
     problems = check(base)
+    if base == BASE:
+        problems += moved(OLD, base)
     if problems:
         print("\n問題:\n" + "\n".join(f"- {p}" for p in problems))
         return 1
