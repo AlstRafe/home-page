@@ -3,18 +3,20 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import shutil
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from urllib.parse import urlencode
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from test_homepage import call
 
 import homepage
-from homepage import server
+from homepage import owner, server
 
 FACTORY = """
 def site(mount, host):
@@ -201,6 +203,130 @@ entry = "nothing:site"
                 ("haruxera", "GET"),
             ],
         )
+
+
+class OwnerTests(unittest.TestCase):
+    """持ち主のログイン: homepage/owner.py and the server's /owner."""
+
+    PUBLIC = "sites.duckdns.org"
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.file = self.tmp / "state" / "owner.json"
+        self.cost, owner.SCRYPT = owner.SCRYPT, {"n": 2**4, "r": 8, "p": 1}  # the real cost is slow on purpose
+        self.seen = []
+
+        def app(environ, start_response):
+            self.seen.append(
+                (environ.get(server.VISITOR_KEY), environ.get(server.OWNER_KEY), environ.get("HTTP_COOKIE"))
+            )
+            start_response("200 OK", [])
+            return [b""]
+
+        self.owner = owner.Owner(self.file)
+        self.public = server.Public(app, server.Hosts(["haruxera"], [self.PUBLIC]).visitor, owner=self.owner)
+
+    def tearDown(self):
+        owner.SCRYPT = self.cost
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def post(self, form, **headers):
+        body = urlencode(form).encode()
+        return call(
+            self.public,
+            "/owner",
+            "POST",
+            host=self.PUBLIC,
+            CONTENT_LENGTH=str(len(body)),
+            CONTENT_TYPE="application/x-www-form-urlencoded",
+            **{"wsgi.input": io.BytesIO(body), "HTTP_ORIGIN": f"https://{self.PUBLIC}", **headers},
+        )
+
+    def test_a_password_is_kept_as_a_hash_and_checked_with_a_limit_for_everyone(self):
+        self.assertFalse(self.owner.ready)
+        self.assertEqual(self.owner.login("whatever"), "off")
+        with self.assertRaises(ValueError):
+            owner.write("short", self.file)
+        owner.write("correct horse battery", self.file)
+        self.assertNotIn("correct horse", self.file.read_text(encoding="utf-8"))
+        if sys.platform != "win32":
+            self.assertEqual(self.file.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(self.owner.login("correct horse battery", now=1000), "ok")
+        for second in range(5):
+            self.assertEqual(self.owner.login("wrong password!", now=1000 + second), "wrong")
+        self.assertEqual(self.owner.login("correct horse battery", now=1010), "busy")  # even the right one
+        self.assertEqual(self.owner.login("correct horse battery", now=1061), "ok")  # a minute later
+        for second in range(15):
+            self.owner.login("wrong password!", now=1100 + second * 13)
+        self.assertEqual(self.owner.login("correct horse battery", now=1400), "busy")  # 20 in an hour
+        self.assertEqual(self.owner.login("correct horse battery", now=1000 + 3601), "ok")
+
+    def test_the_cookie_is_signed_and_a_new_password_signs_every_device_out(self):
+        owner.write("correct horse battery", self.file)
+        name, value = self.owner.cookie(now=5000)
+        self.assertEqual(name, "Set-Cookie")
+        for part in ("__Host-owner=", "Path=/", "Secure", "HttpOnly", "SameSite=Lax"):
+            self.assertIn(part, value)
+        cookie = value.split(";", 1)[0]
+        self.assertTrue(self.owner.signed_in({"HTTP_COOKIE": f"lang=ko; {cookie}"}, now=5001))
+        self.assertTrue(self.owner.signed_in({"HTTP_COOKIE": f'x="a b; {cookie}'}, now=5001))  # after a broken one
+        issued, signature = cookie.split("=", 1)[1].split(".")
+        self.assertFalse(self.owner.signed_in({"HTTP_COOKIE": f"__Host-owner={int(issued) + 1}.{signature}"}, now=5001))
+        self.assertFalse(self.owner.signed_in({"HTTP_COOKIE": cookie}, now=5000 + owner.SECONDS + 1))
+        self.assertFalse(self.owner.signed_in({"HTTP_COOKIE": "__Host-owner=garbage"}, now=5001))
+        self.assertFalse(self.owner.signed_in({}, now=5001))
+        owner.write("another long password", self.file)
+        self.assertFalse(self.owner.signed_in({"HTTP_COOKIE": cookie}, now=5001))
+        self.assertEqual(owner.without_cookie(f"lang=ko; {cookie}; theme=x"), "lang=ko; theme=x")
+
+    def test_a_signed_in_device_is_the_owners_under_the_public_name(self):
+        owner.write("correct horse battery", self.file)
+        call(self.public, "/news/", host=self.PUBLIC, HTTP_COOKIE="lang=ko")
+        self.assertEqual(self.seen[-1], (True, False, "lang=ko"))
+        status, headers, page = call(self.public, "/owner", host=self.PUBLIC)
+        self.assertEqual(status, 200)
+        self.assertIn('type="password"', page)
+        self.assertIn("form-action 'self'", headers["Content-Security-Policy"])
+        self.assertEqual((headers["Cache-Control"], headers["X-Robots-Tag"]), ("no-store", "noindex"))
+        status, _, page = self.post({"password": "not it at all"})
+        self.assertEqual(status, 401)
+        self.assertIn("パスワードが違います", page)
+        self.assertEqual(self.post({"password": "correct horse battery"}, HTTP_SEC_FETCH_SITE="cross-site")[0], 403)
+        self.assertEqual(self.post({"password": "correct horse battery"}, HTTP_ORIGIN="https://evil.example")[0], 403)
+        status, headers, _ = self.post({"password": "correct horse battery"}, HTTP_SEC_FETCH_SITE="same-origin")
+        self.assertEqual((status, headers["Location"]), (303, "/"))
+        cookie = headers["Set-Cookie"].split(";", 1)[0]
+        call(self.public, "/news/", host=self.PUBLIC, HTTP_COOKIE=f"lang=ko; {cookie}")
+        self.assertEqual(self.seen[-1], (False, True, "lang=ko"))  # the sites never see the cookie
+        self.assertIn("ログアウト", call(self.public, "/owner", host=self.PUBLIC, HTTP_COOKIE=cookie)[2])
+        status, headers, _ = self.post({"do": "logout"}, HTTP_COOKIE=cookie)
+        self.assertEqual((status, headers["Location"]), (303, "/owner"))
+        self.assertIn("Max-Age=0", headers["Set-Cookie"])
+        call(self.public, "/news/", host="haruxera", HTTP_COOKIE=cookie)
+        self.assertEqual(self.seen[-1], (None, None, cookie))  # the owner's own names are left as they are
+
+    def test_without_a_password_there_is_no_login(self):
+        status, _, page = call(self.public, "/owner", host=self.PUBLIC, HTTP_ACCEPT_LANGUAGE="en-GB")
+        self.assertEqual(status, 200)
+        self.assertIn("Sign-in has not been set up yet.", page)
+        self.assertNotIn('type="password"', page)
+        self.assertEqual(self.post({"password": "correct horse battery"})[0], 403)
+        self.assertEqual(self.seen, [])
+
+    def test_the_list_shows_the_owner_everything_after_signing_in(self):
+        apps = [homepage.App("/news", "/news", lambda environ, start: [b""], "News")]
+        config = self.tmp / "sites.toml"
+        config.write_text(
+            '[[site]]\nmount = "/news"\napp = "/news"\n\n[[site]]\nmount = "/news-private"\nname = "x"\n'
+            'folder = "nowhere"\npublic = false\n',
+            encoding="utf-8",
+        )
+        portal = homepage.build(apps, visitor_hosts=lambda host: host == self.PUBLIC, config=config)
+        page = call(portal, "/", host=self.PUBLIC, **{server.VISITOR_KEY: False, server.OWNER_KEY: True})[2]
+        self.assertIn('href="/owner"', page)
+        self.assertNotIn('href="/owner"', call(portal, "/", host=self.PUBLIC, **{server.VISITOR_KEY: True})[2])
+        self.assertNotIn('href="/owner"', call(portal, "/", host="haruxera")[2])  # the own names need no login
+        self.assertEqual(call(portal, "/owner", host="haruxera")[:2][0], 302)
 
 
 class LauncherTests(unittest.TestCase):

@@ -550,6 +550,45 @@ footer p {
   margin-right: 0.45em;
 }
 
+/* 持ち主のログイン (/owner) */
+.signin {
+  display: grid;
+  gap: 0.45rem;
+  max-width: 22rem;
+  margin-top: 1.2rem;
+}
+.signin label {
+  font-weight: 600;
+}
+.signin input {
+  min-height: 2.75rem;
+  padding: 0 0.8rem;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+}
+.signin input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.signin .open {
+  justify-self: start;
+  margin-top: 0.35rem;
+}
+button.open {
+  border: 0;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.problem {
+  margin: 0.8rem 0 0;
+  color: var(--warn);
+  font-weight: 600;
+}
+
 @media (max-width: 30rem) {
   body {
     padding-top: 1.75rem;

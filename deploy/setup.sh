@@ -10,6 +10,8 @@
 #   sudo bash setup.sh --funnel         publish port 5000 again (after the machine was renamed)
 #   sudo bash setup.sh --direct NAME    serve https://NAME.duckdns.org/ from here too (Caddy); sites.toml [server]
 #                                       public names it for the server, moved_to sends the Funnel name's pages there
+#   sudo bash setup.sh --owner [off]    set (or drop) the password the owner signs in with at /owner, to get
+#                                       everything under the public names too (homepage/owner.py)
 #   sudo bash setup.sh --sync           what update.sh runs after pulling (units, packages, VERSION as needed)
 #
 # Safe to run again: whatever is in place already is kept. Ubuntu 22.04 or newer.
@@ -286,6 +288,25 @@ direct() {
   fi
 }
 
+# 持ち主のログイン: the password is read here (never an argument, so never in ps) and handed to the
+# server's account, which keeps only its scrypt hash in $STATE/owner.json; the server sees a new one at once.
+owner_password() {
+  local password again
+  if [ "${1:-}" = off ]; then
+    runuser -u "$ACCOUNT" -- env -C "$ROOT/Home Page" "$VENV/bin/python" -m homepage.owner --off
+    return
+  fi
+  read -rsp "持ち主のログインのパスワード（10文字以上。入力は表示されません）: " password
+  echo
+  read -rsp "もう一度: " again
+  echo
+  [ "$password" = "$again" ] || { echo "2回の入力が違います。もう一度どうぞ。" >&2; exit 2; }
+  printf '%s\n' "$password" | runuser -u "$ACCOUNT" -- env -C "$ROOT/Home Page" "$VENV/bin/python" -m homepage.owner --stdin
+  if [ -n "$(direct_domain)" ]; then
+    echo "ログインするページ: https://$(direct_domain).duckdns.org/owner"
+  fi
+}
+
 public_name() {
   tailscale status --json 2>/dev/null | "$VENV/bin/python" -c \
     'import json, sys; print((json.load(sys.stdin).get("Self") or {}).get("DNSName", "").rstrip("."))' 2>/dev/null || true
@@ -348,10 +369,11 @@ main() {
     --units) install_units; return ;;
     --funnel) publish; return ;;
     --direct) direct "${2:-}"; return ;;
+    --owner) owner_password "${2:-}"; return ;;
     --sync) sync_changes; return ;;
     --import) import_data "${2:?取り込むファイルを指定してください}"; wait_until_answering; return ;;
     "") ;;
-    *) echo "使い方: sudo bash setup.sh [--import FILE | --units | --funnel | --direct NAME | --sync]" >&2; exit 2 ;;
+    *) echo "使い方: sudo bash setup.sh [--import FILE | --units | --funnel | --direct NAME | --owner [off] | --sync]" >&2; exit 2 ;;
   esac
   install_packages
   add_swap
