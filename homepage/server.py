@@ -1,10 +1,12 @@
 """The server of this PC's sites: ``python -m homepage.server`` (launcher.py runs it and keeps it running).
 
 It listens on one port (sites.toml ``[server]``): on this PC's Tailscale and LAN addresses and on
-loopback, where Tailscale Funnel hands the public name's requests over (``listen = "network"``), or
-on loopback only (``listen = "local"``). It serves the portal with the folder sites and the Python
-sites of sites.toml, answers only to this PC's own names, and marks requests under the public name
-(``*.ts.net``, テスト公開) https, with HSTS and kept out of search results.
+loopback, where Tailscale Funnel (or Caddy, setup.sh --direct) hands the public name's requests over
+(``listen = "network"``), or on loopback only (``listen = "local"``). It serves the portal with the
+folder sites and the Python sites of sites.toml, answers only to this PC's own names and the public
+names, and marks requests under a public name (``*.ts.net``, and ``[server] public``: テスト公開)
+https, with HSTS, kept out of search results and flagged for the sites (``homepage.visitor``). With
+``[server] moved_to`` set, page requests under the other public names are sent on to that one.
 
 A Python site is a folder put on ``sys.path`` and a factory named by ``entry`` ("module:function"),
 called once at the start as ``factory(mount=..., host={...})``; it returns a dict with ``app`` (WSGI)
@@ -32,6 +34,7 @@ import threading
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import quote
 
 from homepage import CONFIG, MOUNT, PACKAGE, App, build
 
@@ -41,6 +44,9 @@ POLL_SECONDS = 15.0
 NETWORK_POLL_ROUNDS = 4
 THREADS = 16
 FUNNEL_SUFFIX = ".ts.net"
+#: Set (True) in the WSGI environ of a request under a public name, for the sites (News Site's public.py):
+#: no request can set it, unlike a header.
+VISITOR_KEY = "homepage.visitor"
 TAILSCALE = ipaddress.ip_network("100.64.0.0/10")
 LOOPBACK = "127.0.0.1"
 
@@ -51,6 +57,16 @@ class Settings:
     listen: str = "network"
     hosts: tuple = ()
     python_sites: list = field(default_factory=list)
+    #: Public names this machine serves itself (setup.sh --direct: its DuckDNS name), besides Funnel's.
+    public: tuple = ()
+    #: The public name the sites live at now: page requests under the others are sent there.
+    moved_to: str = ""
+
+
+def _names(value) -> tuple:
+    if not isinstance(value, list):
+        return ()
+    return tuple(dict.fromkeys(host_without_port(item) for item in value if isinstance(item, str) and item.strip()))
 
 
 def read_settings(config: Path = CONFIG) -> Settings:
@@ -75,11 +91,17 @@ def read_settings(config: Path = CONFIG) -> Settings:
         if isinstance(hosts, list)
         else ()
     )
+    public = _names(server.get("public", []))
+    moved_to = server.get("moved_to", "")
+    moved_to = host_without_port(moved_to) if isinstance(moved_to, str) else ""
+    if moved_to and moved_to not in public:
+        print(f"[server] moved_to（{moved_to}）が public にありません。転送しません。", flush=True)
+        moved_to = ""
     sites = data.get("site", [])
     python_sites = (
         [entry for entry in sites if isinstance(entry, dict) and "python" in entry] if isinstance(sites, list) else []
     )
-    return Settings(port, listen, hosts, python_sites)
+    return Settings(port, listen, hosts, python_sites, public, moved_to)
 
 
 def settings_stamp(config: Path = CONFIG) -> str | None:
@@ -193,40 +215,59 @@ def host_without_port(raw: str) -> str:
 
 class Hosts:
     """The names this server answers to: this PC's own (loopback, its addresses, its computer and
-    Tailscale names, ``[server] hosts``), and the public name (``*.ts.net``, テスト公開)."""
+    Tailscale names, ``[server] hosts``), and the public names (``*.ts.net`` and ``public``, テスト公開).
+    Only the own names are the owner's: they are what the sites are told to trust (``names``)."""
 
-    def __init__(self, names):
+    def __init__(self, names, public=()):
         self.names = frozenset({"localhost", "127.0.0.1", "::1", *(name.lower() for name in names if name)})
+        self.public = frozenset(host_without_port(name) for name in public if name) - self.names
 
     def allowed(self, host: str) -> bool:
-        host = host_without_port(host)
-        return host in self.names or host.endswith(FUNNEL_SUFFIX)
+        return host_without_port(host) in self.names or self.visitor(host)
 
-    @staticmethod
-    def visitor(host: str) -> bool:
-        return host_without_port(host).endswith(FUNNEL_SUFFIX)
+    def visitor(self, host: str) -> bool:
+        host = host_without_port(host)
+        return host in self.public or host.endswith(FUNNEL_SUFFIX)
 
 
 class Public:
-    """WSGI around everything: requests under the public name came through a TLS proxy (Funnel), so they
-    are https (share previews need absolute https URLs), and their answers say: https only from now on,
-    and no search-engine listing (a test, for the people sent the link)."""
+    """WSGI around everything: requests under a public name came through a TLS proxy (Funnel or Caddy),
+    so they are https (share previews need absolute https URLs), the sites are told they are a visitor's
+    (``VISITOR_KEY``), and their answers say: https only from now on, and no search-engine listing (a
+    test, for the people sent the link).
 
-    def __init__(self, app, visitor):
-        self.app, self.visitor = app, visitor
+    ``moved_to`` (``[server] moved_to``): the public name the sites live at now. A page asked for under
+    another public name (the old Funnel address in links people have) is sent there, the same path;
+    other methods are answered where they are (the relay's clients would not follow with their token).
+    The redirect is temporary (307), so going back to the old name needs no cache to expire."""
+
+    HEADERS = (("Strict-Transport-Security", "max-age=31536000"), ("X-Robots-Tag", "noindex"))
+
+    def __init__(self, app, visitor, moved_to: str = ""):
+        self.app, self.visitor, self.moved_to = app, visitor, host_without_port(moved_to)
 
     def __call__(self, environ, start_response):
-        if not self.visitor(environ.get("HTTP_HOST", "")):
+        host = environ.get("HTTP_HOST", "")
+        if not self.visitor(host):
             return self.app(environ, start_response)
+        if (
+            self.moved_to
+            and host_without_port(host) != self.moved_to
+            and environ.get("REQUEST_METHOD", "GET") in ("GET", "HEAD")
+        ):
+            path = quote(environ.get("SCRIPT_NAME", "") + environ.get("PATH_INFO", ""), safe="/;=,", encoding="latin-1")
+            query = environ.get("QUERY_STRING", "")
+            location = f"https://{self.moved_to}{path or '/'}" + (f"?{query}" if query else "")
+            start_response(
+                "307 Temporary Redirect",
+                [("Location", location), ("Content-Length", "0"), ("Cache-Control", "no-store"), *self.HEADERS],
+            )
+            return [b""]
 
         def start(status, headers, exc_info=None):
-            return start_response(
-                status,
-                [*headers, ("Strict-Transport-Security", "max-age=31536000"), ("X-Robots-Tag", "noindex")],
-                exc_info,
-            )
+            return start_response(status, [*headers, *self.HEADERS], exc_info)
 
-        return self.app(dict(environ, **{"wsgi.url_scheme": "https"}), start)
+        return self.app(dict(environ, **{"wsgi.url_scheme": "https", VISITOR_KEY: True}), start)
 
 
 # -- Python sites --------------------------------------------------------------------------------------
@@ -365,7 +406,7 @@ def main(argv: list[str] | None = None) -> int:
         settings.listen = "local"
     found = tailscale() if settings.listen == "network" else (None, None)
     hosts = addresses(settings, found)
-    names = Hosts([*hosts, found[1], socket.gethostname(), *settings.hosts])
+    names = Hosts([*hosts, found[1], socket.gethostname(), *settings.hosts], settings.public)
     host = {
         "port": settings.port,
         "addresses": hosts,
@@ -397,7 +438,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         return serve(
-            Public(portal, names.visitor),
+            Public(portal, names.visitor, settings.moved_to),
             hosts,
             settings.port,
             supervised=os.environ.get("HOME_SUPERVISED") == "1",

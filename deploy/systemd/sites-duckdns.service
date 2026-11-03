@@ -1,0 +1,9 @@
+# Keeps the DuckDNS name on this VM's public address (deploy/duckdns.sh; only after setup.sh --direct).
+[Unit]
+Description=Point the DuckDNS name at this VM
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash "/srv/sites/Home Page/deploy/duckdns.sh"

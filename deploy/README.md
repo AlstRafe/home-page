@@ -5,7 +5,7 @@ PC を切っても `/`・`/news`・`/infra` が動き続けるように、Oracle
 ## しくみ
 
 - **VM**: Oracle Cloud の Always Free、Arm の VM.Standard.A1.Flex（2 OCPU・12 GB、Ubuntu 24.04）
-- **公開**: Tailscale Funnel（`https://<名前>.<tailnet>.ts.net/`）。ポート開放もドメインもいらない。移行のときに PC の今のアドレスを VM に引き継ぐので、配ったリンクはそのまま使える
+- **公開**: Tailscale Funnel（`https://<名前>.<tailnet>.ts.net/`）。ポート開放もドメインもいらない。移行のときに PC の今のアドレスを VM に引き継ぐので、配ったリンクはそのまま使える。ただし Funnel は接続のたびに暗号化の握手で 0.7〜5 秒かかるので、速くするには下の「直接配信」で VM から直接配信する（DuckDNS の無料の名前と Caddy）
 - **コード**: GitHub の `home-page`・`news-site`・`infra-game`。VM が 1 分ごとに見に行き、**master** に push されたものに切り替える（`update.sh`。リポジトリの既定ブランチではなく、いつも master）。サーバーは新しいコードで自分で再起動する
 - **データ**: News Site の DB・設定・記事は VM の中（`/srv/sites/News Site/work/app` の `instance/` と `articles/`）。git には入れない。毎時の収集も VM で動く。毎日 4:30 ごろ `instance/` を `/srv/sites/backup` に保存（14 日分）
 - **止められないために**: Always Free の VM は「7 日間、CPU・ネットワーク・メモリがどれも 20% 未満」だと Oracle に回収されることがある。`keepalive.py` がメモリの 25%（4 GB 以上のとき）と、毎晩 3〜5 時（日本時間）の 2 時間だけ CPU を使う。日中は何もしない（1/8 OCPU の VM では、どんなに譲っても使った分だけサイトが遅くなるため）
@@ -54,9 +54,20 @@ py -3 deploy\migrate.py
 - News Site のデータだけ PC から送り直す: `py -3 deploy\migrate.py --host <名前> --data-only`（VM にあったデータは `/srv/sites/backup` に移る）
 - 設定の入れ直し（何度実行してもよい）: `sudo bash "/srv/sites/Home Page/deploy/setup.sh"`
 
+## 直接配信（Funnel より速い）
+
+Funnel は Tailscale の中継を通るので、新しい接続のたびに 0.7〜5 秒待つ（VM の中なら 0.05 秒）。VM の 443 番で Caddy が直接答えるようにすると、この待ちがなくなる。費用は 0 円のまま。
+
+1. https://www.duckdns.org/ で GitHub などでログイン → sub domain に `haruxera` → **add domain**。画面上部の **token** をコピーしておく
+2. Oracle Cloud: メニュー → ネットワーキング → 仮想クラウド・ネットワーク → VM の VCN → セキュリティ・リスト → **Default Security List** → **イングレス・ルールの追加**: ソース CIDR `0.0.0.0/0`、宛先ポート範囲 `80,443` → 追加
+3. PC で `ssh -t ubuntu@<名前>.<tailnet>.ts.net "sudo bash '/srv/sites/Home Page/deploy/setup.sh' --direct haruxera"` → token を貼って Enter（表示されない）。`公開アドレス: https://haruxera.duckdns.org/` と出れば完了
+
+setup.sh が DuckDNS の名前をこの VM の公開 IP に向け（毎日 `sites-duckdns.timer` が見直す）、Caddy を入れて Let's Encrypt の証明書を取り（更新も Caddy）、VM のファイアウォール（iptables）で 80 と 443 を開ける。サーバーがこの名前を訪問者として扱うのは `sites.toml` の `[server] public` に書いてあるから。`moved_to` も書くと、Funnel のアドレスで開かれたページはこの名前へ転送される（307。POST は転送しない）。Funnel はそのまま動かしておく（古いリンクと tailnet のため）。
+
 ## うまくいかないとき
 
 - **ssh で入れない**: 古い tailnet だと SSH の許可がない。管理画面の Access controls の `"ssh"` に `{"action": "check", "src": ["autogroup:member"], "dst": ["autogroup:self"], "users": ["autogroup:nonroot", "root"]}` を足す
+- **直接配信で「証明書が取れませんでした」**: 2. のセキュリティ・リストを確かめて、3. をもう一度（token は覚えているので貼らなくてよい）。記録は `journalctl -u caddy -n 30`
 - **Tailscale のない端末から開けない / Funnel が有効にならない**: PC で `ssh -t ubuntu@<名前>.<tailnet>.ts.net "sudo bash '/srv/sites/Home Page/deploy/setup.sh' --funnel"`。URL が出たら開いて Funnel を許可する。`公開アドレス:` と出れば外から開ける（反映に数分かかることがある）
 - **アドレスの引き継ぎで PC の名前を変えられなかった**: 管理画面で PC の名前を `<名前>-pc` に変えてから `py -3 deploy\migrate.py --address-only`
 - **PC で配信に戻す**: VM の名前を変える（`sudo tailscale set --hostname=sites`）→ PC の名前を元に戻す → PC で `py -3 launcher.py --take-over` と `tailscale funnel --bg 5000`、News Site の収集タスクを有効に戻す（`schtasks /Change /TN <タスク名> /ENABLE`）

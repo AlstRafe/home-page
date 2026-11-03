@@ -1,0 +1,17 @@
+# The sites straight from this VM at https://@NAME@/ (setup.sh --direct writes /etc/caddy/Caddyfile from
+# this; update.sh puts a changed copy into effect). Caddy gets and renews the certificate itself (Let's
+# Encrypt), so a visitor's browser talks TLS with this VM directly, without Tailscale Funnel's relays.
+{
+    # The VM's own address only: Tailscale holds port 443 on its address (tailscale0) for the tailnet.
+    default_bind @BIND@
+    # HTTP/2 over TCP. HTTP/3 would need UDP 443 open as well, and browsers would try it first.
+    servers {
+        protocols h1 h2
+    }
+}
+
+# Home Page answers this name as a visitor's (HOME_PUBLIC_HOSTS), as it does the Funnel name. Requests
+# under any other name never get past Caddy, so none reaches the server as the owner's (localhost).
+@NAME@ {
+    reverse_proxy 127.0.0.1:5000
+}
