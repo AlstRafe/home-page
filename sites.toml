@@ -72,18 +72,18 @@ tags = ["毎時更新", "英・中・韓 → 日本語", "各社の読み比べ"
 
 [site.ko]
 subtitle = "번역해서 비교해 읽는 뉴스"
-description = "BBC·중앙통신사(CNA)·연합뉴스와 기술 매체 InfoQ·iThome 등을 매시간 모읍니다. 원문과 일본어 번역을 나란히 놓고, 같은 뉴스를 매체별로 비교해 읽을 수 있습니다."
-tags = ["매시간 업데이트", "영·중·한 → 일본어", "매체별 비교"]
+description = "BBC·중앙통신사(CNA)·연합뉴스와 기술 매체 InfoQ·iThome 등을 매시간 모읍니다. 원문과 번역을 나란히 놓고, 같은 뉴스를 매체별로 비교해 읽을 수 있습니다."
+tags = ["매시간 업데이트", "영·중 → 한국어", "매체별 비교"]
 
 [site.en-GB]
 subtitle = "The news, translated and compared"
-description = "Collects the BBC, CNA, Yonhap and tech outlets such as InfoQ and iThome every hour. Read each original beside its Japanese translation, and compare how the outlets covered the same story."
-tags = ["Updated hourly", "EN · ZH · KO → Japanese", "Compare the outlets"]
+description = "Collects the BBC, CNA, Yonhap and tech outlets such as InfoQ and iThome every hour. Read each original beside its translation, and compare how the outlets covered the same story."
+tags = ["Updated hourly", "ZH · KO → English", "Compare the outlets"]
 
 [site.zh-TW]
 subtitle = "翻譯後比較閱讀的新聞"
-description = "每小時收集 BBC、中央社、韓聯社，以及 InfoQ、iThome 等科技媒體。原文與日文譯文並列，可比較各家媒體如何報導同一則新聞。"
-tags = ["每小時更新", "英・中・韓 → 日文", "各家媒體比較"]
+description = "每小時收集 BBC、中央社、韓聯社，以及 InfoQ、iThome 等科技媒體。原文與譯文並列，可比較各家媒體如何報導同一則新聞。"
+tags = ["每小時更新", "英・韓 → 中文", "各家媒體比較"]
 
 [[site]]
 mount = "/infra"

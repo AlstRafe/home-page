@@ -73,6 +73,7 @@ GZIP_MIN = 1024
 #: (automatic -> light -> dark), the same choice News Site and CoreLab read (localStorage "theme": the
 #: sites share one origin). Inline in <head>, so the page is painted in it from the start; the CSP
 #: allows exactly this script, by its hash. Phone toolbars (theme-color) follow a forced choice too.
+#: It also closes the language menu on a click elsewhere or Escape (back on its button), as the sites do.
 THEME_SCRIPT = (
     '(function(){var d=document,r=d.documentElement,o=["auto","light","dark"],c={light:"#f6f4ef",dark:"#161513"};'
     'function get(){try{var t=localStorage.getItem("theme");return o.indexOf(t)>0?t:"auto"}'
@@ -83,7 +84,9 @@ THEME_SCRIPT = (
     "set(get());"
     'd.addEventListener("DOMContentLoaded",function(){var b=d.getElementById("theme");'
     'if(b)b.addEventListener("click",function(){var t=o[(o.indexOf(get())+1)%3];'
-    'try{if(t==="auto")localStorage.removeItem("theme");else localStorage.setItem("theme",t)}catch(e){}set(t)})});'
+    'try{if(t==="auto")localStorage.removeItem("theme");else localStorage.setItem("theme",t)}catch(e){}set(t)});'
+    'var l=d.querySelector("details.lang");if(l){d.addEventListener("click",function(e){if(!l.contains(e.target))l.open=false});'
+    'l.addEventListener("keydown",function(e){if(e.key==="Escape"&&l.open){l.open=false;l.querySelector("summary").focus()}})}});'
     'addEventListener("storage",function(e){if(e.key==="theme"||e.key===null)set(get())})})();'
 )
 THEME_HASH = "'sha256-" + base64.b64encode(hashlib.sha256(THEME_SCRIPT.encode()).digest()).decode() + "'"
