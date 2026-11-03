@@ -43,8 +43,13 @@ ACCENTS = ("red", "blue", "teal", "green", "amber", "purple", "gray")
 #: What a language table may say (sites.toml ``[ko]`` and so on, and ``[site.ko]`` under a site).
 PAGE_TEXTS = ("title", "lead", "points", "about")
 SITE_TEXTS = ("name", "subtitle", "description", "tags", "open")
-#: The portal's own addresses: no site may be mounted over them.
-OWN = ("/", "/portal.css", "/favicon.svg", "/apple-touch-icon.png", "/og.png", "/robots.txt")
+#: The portal's own addresses: no site may be mounted over them (/owner: 持ち主のログイン, homepage.owner).
+OWN = ("/", "/portal.css", "/favicon.svg", "/apple-touch-icon.png", "/og.png", "/robots.txt", "/owner")
+#: Set by the server (homepage.server.Public) in the WSGI environ of a request under a public name:
+#: VISITOR_KEY True for a visitor's, OWNER_KEY True for the owner's signed-in device. No request can
+#: set them, unlike a header; the sites read them (News Site's public.py).
+VISITOR_KEY = "homepage.visitor"
+OWNER_KEY = "homepage.owner"
 #: Files of this package served as they are: address -> (file, type).
 FILES = {
     "/favicon.svg": ("favicon.svg", "image/svg+xml"),
@@ -389,6 +394,8 @@ class Portal:
                 return _plain(start_response, "400 Bad Request", b"Bad Request")
             if method not in ("GET", "HEAD"):
                 return _plain(start_response, "405 Method Not Allowed", b"Method Not Allowed")
+            if path == "/owner":  # the owner's own names need no login (the server answers it under the public ones)
+                return _redirect(start_response, environ.get("SCRIPT_NAME", "") + "/", dict(environ, QUERY_STRING=""))
             if path == "/portal.css":  # the index asks for it at its version (?v=)
                 current = environ.get("QUERY_STRING", "") == f"v={_version(PACKAGE / 'portal.css')}"
                 return _send(
@@ -420,6 +427,8 @@ class Portal:
         return _not_found(environ, start_response)
 
     def _visitor(self, environ) -> bool:
+        if VISITOR_KEY in environ:  # the server said (a public name, and whether the owner signed in there)
+            return environ[VISITOR_KEY] is True
         return self.visitor_hosts is not None and bool(self.visitor_hosts(environ.get("HTTP_HOST", "")))
 
     def robots(self) -> str:
@@ -465,7 +474,7 @@ class Portal:
             "sites": "\n".join(self._card(site, n, visitor, lang) for n, site in enumerate(shown, 1)),
             "count": e(i18n.text(lang, "サイト {count} 件", count=len(shown))),
             "about": f"<p>{e(about)}</p>" if about else "",
-            "owner": "" if visitor else self._owner_note(),
+            "owner": "" if visitor else self._owner_note(environ.get(OWNER_KEY) is True),
         }
         page = _read(PACKAGE / "page.html").decode("utf-8")
         return re.sub(r"\{\{ (\w+) \}\}", lambda m: values.get(m.group(1), ""), page)
@@ -521,15 +530,17 @@ class Portal:
         inner = svg or f'<span class="letter">{html.escape(site.name[:1].upper())}</span>'
         return f'<span class="icon" aria-hidden="true">{inner}</span>'
 
-    def _owner_note(self) -> str:
-        """For the owner only (not the public name): how to add a site, and what in sites.toml is wrong."""
+    def _owner_note(self, signed_in: bool = False) -> str:
+        """For the owner only (never a visitor): how to add a site, what in sites.toml is wrong, and on
+        a device signed in under the public name (homepage.owner), the way to sign out."""
         e = html.escape
         problems = "".join(f"<li>{e(p)}</li>" for p in self.problems)
         problems = f'<ul class="problems" role="status">{problems}</ul>' if problems else ""
+        signed = '<p><a href="/owner">持ち主としてログイン中です（ログアウト）</a></p>' if signed_in else ""
         return (
-            f'<div class="owner"><h2>このPCの持ち主向け</h2>{problems}'
+            f'<div class="owner"><h2>このPCの持ち主向け</h2>{problems}{signed}'
             f"<p>サイトを足すには <code>{e(str(self.config))}</code> に <code>[[site]]</code> を1つ書き足して、"
-            f"このページを再読み込みします（再起動は要りません）。この欄はテスト公開の名前では表示されません。</p></div>"
+            f"このページを再読み込みします（再起動は要りません）。この欄は訪問者には表示されません。</p></div>"
         )
 
 
@@ -899,7 +910,9 @@ def _theme_button(lang: str) -> str:
     return f'<button type="button" class="theme" id="theme" title="{e(i18n.text(lang, "ダークモード: 自動 → オフ → オン"))}">{spans}</button>'
 
 
-def _headers(content_type: str, length: int, cache: str) -> list[tuple[str, str]]:
+def _headers(content_type: str, length: int, cache: str, form: bool = False) -> list[tuple[str, str]]:
+    """``form``: the page sends a form to its own address (the owner's login)."""
+    action = "'self'" if form else "'none'"
     return [
         ("Content-Type", content_type),
         ("Content-Length", str(length)),
@@ -907,21 +920,29 @@ def _headers(content_type: str, length: int, cache: str) -> list[tuple[str, str]
         (
             "Content-Security-Policy",
             f"default-src 'none'; script-src {THEME_HASH}; style-src 'self'; img-src 'self'; "
-            "base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+            f"base-uri 'none'; form-action {action}; frame-ancestors 'none'",
         ),
         *SECURITY_HEADERS,
     ]
 
 
 def _send(
-    start_response, content_type: str, body: bytes, cache: str, vary: bool = False, status: str = "200 OK", environ=None
+    start_response,
+    content_type: str,
+    body: bytes,
+    cache: str,
+    vary: bool = False,
+    status: str = "200 OK",
+    environ=None,
+    headers=(),
+    form: bool = False,
 ):
     """``vary``: the page is in the visitor's language. ``environ``: gzipped when the browser takes it
     (a page that fits the first packets of a new connection arrives a round trip sooner)."""
     packed = environ is not None and len(body) >= GZIP_MIN and "gzip" in environ.get("HTTP_ACCEPT_ENCODING", "").lower()
     if packed:
         body = gzip.compress(body, compresslevel=6, mtime=0)
-    headers = _headers(content_type, len(body), cache)
+    extra, headers = list(headers), _headers(content_type, len(body), cache, form)
     if packed:
         headers.append(("Content-Encoding", "gzip"))
     if vary or environ is not None:
@@ -936,8 +957,69 @@ def _send(
                 ),
             )
         )
-    start_response(status, headers)
+    start_response(status, [*headers, *extra])
     return [body]
+
+
+#: What the login page says after a try (homepage.owner.Owner.login), and its status.
+SIGN_IN_PROBLEMS = {
+    "wrong": ("401 Unauthorized", "パスワードが違います。"),
+    "busy": ("429 Too Many Requests", "試した回数が多すぎます。少し待ってからもう一度どうぞ。"),
+    "off": ("403 Forbidden", "ログインはまだ設定されていません。"),
+}
+
+
+def owner_page(environ, start_response, state: str, problem: str = "", headers=()):
+    """持ち主のログイン (``/owner`` under a public name, answered by homepage.server.Public): ``state``
+    "form" (the password), "in" (this device is the owner's: sign out) or "off" (no password set);
+    ``problem``: a SIGN_IN_PROBLEMS key, after a try."""
+    lang = i18n.chosen(environ)
+    e = html.escape
+    say = lambda ja: e(i18n.text(lang, ja))  # noqa: E731
+    status, message = SIGN_IN_PROBLEMS.get(problem, ("200 OK", ""))
+    if state == "off":
+        message = SIGN_IN_PROBLEMS["off"][1]
+    alert = f'<p class="problem" role="alert">{say(message)}</p>' if message else ""
+    if state == "in":
+        lead = say("この端末は持ち主としてログインしています。公開中のページでも、すべての機能が使えます。")
+        form = (
+            '<form method="post" action="/owner"><input type="hidden" name="do" value="logout">'
+            f'<button class="open" type="submit">{say("ログアウト")}</button></form>'
+        )
+    elif state == "form":
+        lead = say("このサイトの持ち主だけが使うページです。ログインすると、この端末ではすべての機能が使えます。")
+        form = (
+            '<form method="post" action="/owner" class="signin">'
+            '<input type="hidden" name="username" value="owner" autocomplete="username">'
+            f'<label for="password">{say("パスワード")}</label>'
+            '<input id="password" name="password" type="password" autocomplete="current-password" required autofocus>'
+            f'<button class="open" type="submit">{say("ログイン")}</button></form>'
+        )
+    else:
+        lead, form = "", ""
+    lead = f'<p class="lead">{lead}</p>' if lead else ""
+    heading = say("持ち主のログイン")
+    body = (
+        f'<!doctype html><html lang="{lang}"><head><meta charset="utf-8">'
+        f'<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">'
+        f'<title>{heading}</title><script>{THEME_SCRIPT}</script><link rel="icon" href="/favicon.svg" type="image/svg+xml">'
+        f'<link rel="stylesheet" href="/portal.css?v={_version(PACKAGE / "portal.css")}"></head>'
+        f'<body class="missing"><main><h1>{heading}</h1>'
+        f"{lead}{alert}{form}"
+        f'<p class="go"><a class="back" href="/"><span class="arrow-back" aria-hidden="true">←</span>{say("サイト一覧")}</a></p>'
+        f"</main></body></html>"
+    ).encode()
+    return _send(
+        start_response,
+        "text/html; charset=utf-8",
+        body,
+        "no-store",
+        vary=True,
+        status=status,
+        environ=environ,
+        headers=headers,
+        form=True,
+    )
 
 
 def _not_found(environ, start_response, site: str = ""):

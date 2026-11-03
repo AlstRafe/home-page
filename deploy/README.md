@@ -48,7 +48,7 @@ py -3 deploy\migrate.py
 - **変更は GitHub に push するだけ**（1 分以内に反映）。VM の中のファイルは直接書き換えない（次の反映で GitHub の内容に戻る）
 - VM に入る: `ssh ubuntu@<名前>.<tailnet>.ts.net`（公開アドレスのホスト名。移行後は PC の元の名前なので、短い名前だと PC 自身を指してしまう）
 - 記録: `journalctl -u homepage -u sites-update -u news-collector -n 50`
-- 持ち主向けのページ（一覧の「持ち主向け」欄、News Site の設定）: tailnet の端末から `http://<名前>:5000/`
+- 持ち主向けのページ（一覧の「持ち主向け」欄、News Site の設定）: tailnet の端末から `http://<名前>:5000/`、または下の「持ち主のログイン」でログインした端末から公開アドレスで
 - 再起動: `sudo systemctl restart homepage`
 - 外からの見え方: GitHub Actions の **Live site** が 6 時間ごとと master への push の後に公開アドレスを開き、各サイトのトップ・リンクのプレビュー画像・セキュリティのヘッダを確かめる（`deploy/livecheck.py`。PC で `py -3 deploy\livecheck.py` でもよい）。赤くなると GitHub からメールが来る
 - News Site のデータだけ PC から送り直す: `py -3 deploy\migrate.py --host <名前> --data-only`（VM にあったデータは `/srv/sites/backup` に移る）
@@ -64,10 +64,21 @@ Funnel は Tailscale の中継を通るので、新しい接続のたびに 0.7�
 
 setup.sh が DuckDNS の名前をこの VM の公開 IP に向け（毎日 `sites-duckdns.timer` が見直す）、Caddy を入れて Let's Encrypt の証明書を取り（更新も Caddy）、VM のファイアウォール（iptables）で 80 と 443 を開ける。サーバーがこの名前を訪問者として扱うのは `sites.toml` の `[server] public` に書いてあるから。`moved_to` も書くと、Funnel のアドレスで開かれたページはこの名前へ転送される（307。POST は転送しない）。Funnel はそのまま動かしておく（古いリンクと tailnet のため）。
 
+## 持ち主のログイン（Tailscale なしで全機能）
+
+公開アドレスでは、だれでも訪問者として表示される（News Site の設定・取得の状況・保存・単語帳はなく、既読も残らない）。持ち主の端末はパスワードでログインすると、公開アドレスのままで全部使える。
+
+1. PC で `ssh -t ubuntu@haruxera.duckdns.org "sudo bash '/srv/sites/Home Page/deploy/setup.sh' --owner"` → パスワード（10 文字以上）を 2 回。表示されない
+2. 各端末で `https://haruxera.duckdns.org/owner` を開いてログイン（400 日覚えている）
+
+パスワードは scrypt のハッシュだけが `/srv/sites/state/owner.json` に残る。決め直すと、すべての端末がログアウトされる。やめるときは `--owner off`。パスワードの間違いは全体で 1 分に 5 回・1 時間に 20 回まで。
+
+VM へは鍵の SSH でも入れる（Tailscale がなくてよい）: PC の公開鍵を VM の `~ubuntu/.ssh/authorized_keys` に足して `ssh ubuntu@haruxera.duckdns.org`。鍵がなくなったときは Oracle Cloud のコンソール（インスタンス → コンソール接続 / Cloud Shell）から足し直す。
+
 ## うまくいかないとき
 
 - **ssh で入れない**: 古い tailnet だと SSH の許可がない。管理画面の Access controls の `"ssh"` に `{"action": "check", "src": ["autogroup:member"], "dst": ["autogroup:self"], "users": ["autogroup:nonroot", "root"]}` を足す
-- **直接配信で「証明書が取れませんでした」**: 2. のセキュリティ・リストを確かめて、3. をもう一度（token は覚えているので貼らなくてよい）。記録は `journalctl -u caddy -n 30`
+- **直接配信で「証明書が取れませんでした」**: 2. のセキュリティ・リストを確かめて、3. をもう一度（token は覚えているので貼らなくてよい）。新しく作ったセキュリティ・リストは、VM のサブネット（サブネット → セキュリティ → セキュリティ・リストの追加）に付けるまで効かない。記録は `journalctl -u caddy -n 30`
 - **Tailscale のない端末から開けない / Funnel が有効にならない**: PC で `ssh -t ubuntu@<名前>.<tailnet>.ts.net "sudo bash '/srv/sites/Home Page/deploy/setup.sh' --funnel"`。URL が出たら開いて Funnel を許可する。`公開アドレス:` と出れば外から開ける（反映に数分かかることがある）
 - **アドレスの引き継ぎで PC の名前を変えられなかった**: 管理画面で PC の名前を `<名前>-pc` に変えてから `py -3 deploy\migrate.py --address-only`
 - **PC で配信に戻す**: VM の名前を変える（`sudo tailscale set --hostname=sites`）→ PC の名前を元に戻す → PC で `py -3 launcher.py --take-over` と `tailscale funnel --bg 5000`、News Site の収集タスクを有効に戻す（`schtasks /Change /TN <タスク名> /ENABLE`）
@@ -77,7 +88,7 @@ setup.sh が DuckDNS の名前をこの VM の公開 IP に向け（毎日 `site
 ```
 cloud-init.sh            VM を作るときに貼る（Tailscale に参加）
 migrate.py               PC で実行: VM の準備、データの移動、アドレスの引き継ぎ
-setup.sh                 VM の準備（何度実行してもよい）、--import / --funnel / --units / --sync
+setup.sh                 VM の準備（何度実行してもよい）、--import / --funnel / --direct / --owner / --units / --sync
 update.sh                1 分ごとに GitHub から取り込む（sites-update.timer）
 import_news_data.py      PC から来た News Site のデータを取り込む
 backup.py                News Site の instance/ を毎日保存（sites-backup.timer）

@@ -5,7 +5,8 @@ loopback, where Tailscale Funnel (or Caddy, setup.sh --direct) hands the public 
 (``listen = "network"``), or on loopback only (``listen = "local"``). It serves the portal with the
 folder sites and the Python sites of sites.toml, answers only to this PC's own names and the public
 names, and marks requests under a public name (``*.ts.net``, and ``[server] public``: テスト公開)
-https, with HSTS, kept out of search results and flagged for the sites (``homepage.visitor``). With
+https, with HSTS, kept out of search results and flagged for the sites (``homepage.visitor``), unless
+they come from a device the owner signed in on (``/owner``, homepage.owner: ``homepage.owner``). With
 ``[server] moved_to`` set, page requests under the other public names are sent on to that one.
 
 A Python site is a folder put on ``sys.path`` and a factory named by ``entry`` ("module:function"),
@@ -34,9 +35,10 @@ import threading
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import parse_qs, quote
 
-from homepage import CONFIG, MOUNT, PACKAGE, App, build
+from homepage import CONFIG, MOUNT, OWNER_KEY, PACKAGE, VISITOR_KEY, App, build, owner_page
+from homepage.owner import Owner, without_cookie
 
 RESTART_EXIT_CODE = 75
 POLL_SECONDS = 15.0
@@ -44,9 +46,8 @@ POLL_SECONDS = 15.0
 NETWORK_POLL_ROUNDS = 4
 THREADS = 16
 FUNNEL_SUFFIX = ".ts.net"
-#: Set (True) in the WSGI environ of a request under a public name, for the sites (News Site's public.py):
-#: no request can set it, unlike a header.
-VISITOR_KEY = "homepage.visitor"
+#: The login form's size at most.
+FORM_BYTES = 4096
 TAILSCALE = ipaddress.ip_network("100.64.0.0/10")
 LOOPBACK = "127.0.0.1"
 
@@ -239,12 +240,17 @@ class Public:
     ``moved_to`` (``[server] moved_to``): the public name the sites live at now. A page asked for under
     another public name (the old Funnel address in links people have) is sent there, the same path;
     other methods are answered where they are (the relay's clients would not follow with their token).
-    The redirect is temporary (307), so going back to the old name needs no cache to expire."""
+    The redirect is temporary (307), so going back to the old name needs no cache to expire.
+
+    ``owner`` (homepage.owner.Owner): a request with the owner's cookie is the owner's (``OWNER_KEY``),
+    with everything, as on the owner's own names; ``/owner`` is where a device signs in and out.
+    The cookie is taken off the requests the sites get: they need only the flag."""
 
     HEADERS = (("Strict-Transport-Security", "max-age=31536000"), ("X-Robots-Tag", "noindex"))
 
-    def __init__(self, app, visitor, moved_to: str = ""):
+    def __init__(self, app, visitor, moved_to: str = "", owner: Owner | None = None):
         self.app, self.visitor, self.moved_to = app, visitor, host_without_port(moved_to)
+        self.owner = owner
 
     def __call__(self, environ, start_response):
         host = environ.get("HTTP_HOST", "")
@@ -267,7 +273,49 @@ class Public:
         def start(status, headers, exc_info=None):
             return start_response(status, [*headers, *self.HEADERS], exc_info)
 
-        return self.app(dict(environ, **{"wsgi.url_scheme": "https", VISITOR_KEY: True}), start)
+        signed_in = self.owner is not None and self.owner.signed_in(environ)
+        if environ.get("SCRIPT_NAME", "") + environ.get("PATH_INFO", "") == "/owner":
+            return self._sign_in(dict(environ, **{"wsgi.url_scheme": "https"}), start, signed_in)
+        environ = dict(environ, **{"wsgi.url_scheme": "https", VISITOR_KEY: not signed_in, OWNER_KEY: signed_in})
+        if "HTTP_COOKIE" in environ:
+            environ["HTTP_COOKIE"] = without_cookie(environ["HTTP_COOKIE"])
+        return self.app(environ, start)
+
+    def _sign_in(self, environ, start_response, signed_in: bool):
+        """``/owner``: the login page (GET), a password or a sign-out sent from it (POST)."""
+        owner = self.owner if self.owner is not None and self.owner.ready else None
+        state = "in" if signed_in else "form" if owner else "off"
+        method = environ.get("REQUEST_METHOD", "GET")
+        if method in ("GET", "HEAD"):
+            return owner_page(environ, start_response, state)
+        if method != "POST":
+            return _answer(start_response, "405 Method Not Allowed", [("Allow", "GET, HEAD, POST")])
+        # Only this page may send it (a page elsewhere cannot sign a device in or out).
+        origin = environ.get("HTTP_ORIGIN")
+        if environ.get("HTTP_SEC_FETCH_SITE", "same-origin") not in ("same-origin", "none") or (
+            origin is not None and origin != f"https://{environ.get('HTTP_HOST', '')}"
+        ):
+            return _answer(start_response, "403 Forbidden")
+        try:
+            length = int(environ.get("CONTENT_LENGTH") or 0)
+        except ValueError:
+            length = -1
+        if not 0 <= length <= FORM_BYTES:
+            return _answer(start_response, "413 Content Too Large")
+        form = parse_qs(environ["wsgi.input"].read(length).decode("utf-8", "replace")) if length else {}
+        if form.get("do") == ["logout"]:
+            return _answer(start_response, "303 See Other", [("Location", "/owner"), Owner.forget()])
+        if owner is None:
+            return owner_page(environ, start_response, "off", "off")
+        result = owner.login((form.get("password") or [""])[0])
+        if result != "ok":
+            return owner_page(environ, start_response, "form", result)
+        return _answer(start_response, "303 See Other", [("Location", "/"), owner.cookie()])
+
+
+def _answer(start_response, status: str, headers=()):
+    start_response(status, [("Content-Length", "0"), ("Cache-Control", "no-store"), *headers])
+    return [b""]
 
 
 # -- Python sites --------------------------------------------------------------------------------------
@@ -438,7 +486,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         return serve(
-            Public(portal, names.visitor, settings.moved_to),
+            Public(portal, names.visitor, settings.moved_to, Owner()),
             hosts,
             settings.port,
             supervised=os.environ.get("HOME_SUPERVISED") == "1",

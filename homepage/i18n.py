@@ -55,6 +55,36 @@ TEXTS = {
         "zh-TW": "網址可能已變更，或頁面已不存在。",
     },
     "{name} のトップへ": {"ko": "{name} 첫 화면으로", "en-GB": "{name} home", "zh-TW": "前往 {name} 首頁"},
+    # 持ち主のログイン (/owner)
+    "持ち主のログイン": {"ko": "소유자 로그인", "en-GB": "Owner sign-in", "zh-TW": "擁有者登入"},
+    "このサイトの持ち主だけが使うページです。ログインすると、この端末ではすべての機能が使えます。": {
+        "ko": "이 사이트의 소유자만 쓰는 페이지입니다. 로그인하면 이 기기에서 모든 기능을 쓸 수 있습니다.",
+        "en-GB": "This page is for the owner of these sites. Once signed in, this device can use every feature.",
+        "zh-TW": "這是網站擁有者專用的頁面。登入後，這台裝置就能使用所有功能。",
+    },
+    "この端末は持ち主としてログインしています。公開中のページでも、すべての機能が使えます。": {
+        "ko": "이 기기는 소유자로 로그인되어 있습니다. 공개 중인 페이지에서도 모든 기능을 쓸 수 있습니다.",
+        "en-GB": "This device is signed in as the owner, so every feature works on the public pages too.",
+        "zh-TW": "這台裝置已用擁有者身分登入，在公開的頁面上也能使用所有功能。",
+    },
+    "パスワード": {"ko": "비밀번호", "en-GB": "Password", "zh-TW": "密碼"},
+    "ログイン": {"ko": "로그인", "en-GB": "Sign in", "zh-TW": "登入"},
+    "ログアウト": {"ko": "로그아웃", "en-GB": "Sign out", "zh-TW": "登出"},
+    "パスワードが違います。": {
+        "ko": "비밀번호가 맞지 않습니다.",
+        "en-GB": "That password is not right.",
+        "zh-TW": "密碼不正確。",
+    },
+    "試した回数が多すぎます。少し待ってからもう一度どうぞ。": {
+        "ko": "시도 횟수가 너무 많습니다. 잠시 후 다시 시도해 주세요.",
+        "en-GB": "Too many tries. Please wait a little and try again.",
+        "zh-TW": "嘗試次數過多，請稍候再試。",
+    },
+    "ログインはまだ設定されていません。": {
+        "ko": "로그인이 아직 설정되지 않았습니다.",
+        "en-GB": "Sign-in has not been set up yet.",
+        "zh-TW": "尚未設定登入。",
+    },
 }
 
 _WEEKDAYS = {"ja": "月火水木金土日", "ko": "월화수목금토일", "zh-TW": "一二三四五六日"}
