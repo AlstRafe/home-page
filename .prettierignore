@@ -3,3 +3,4 @@
 # Patches handed to News Site stay exactly as they were sent.
 patches/
 instance/
+package-lock.json

@@ -1,0 +1,13 @@
+{
+  "name": "home-page",
+  "private": true,
+  "description": "Tools for the styles, Markdown and TOML (Prettier, Taplo). The server itself is Python and needs only waitress.",
+  "scripts": {
+    "format": "prettier --write . && taplo fmt",
+    "lint": "prettier --check . && taplo fmt --check"
+  },
+  "devDependencies": {
+    "@taplo/cli": "0.7.0",
+    "prettier": "3.9.10"
+  }
+}

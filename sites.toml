@@ -28,12 +28,12 @@ about = "每個網站都是個人試驗性公開的，內容與公開狀態可�
 
 # サーバー（launcher.py が起動）。ここと Python サイトの指定を変えると、サーバーが自動で再起動します。
 [server]
-port = 5000          # テスト公開（Tailscale Funnel と Caddy）はこの番号の 127.0.0.1 へ転送している
-listen = "network"   # "network": Tailscale・LAN・このPC / "local": このPCだけ
+port = 5000 # テスト公開（Tailscale Funnel と Caddy）はこの番号の 127.0.0.1 へ転送している
+listen = "network" # "network": Tailscale・LAN・このPC / "local": このPCだけ
 # hosts = ["mypc.local"]   # ほかに受け付けるホスト名（このPCの名前・アドレス・*.ts.net は自動）
 # 公開の名前（訪問者として扱う。*.ts.net は自動）。VM が Caddy で直接配信する DuckDNS の名前（setup.sh --direct）
 public = ["haruxera.duckdns.org"]
-moved_to = "haruxera.duckdns.org"   # 公開の名前のうちこれ以外（Funnel）で開かれたページを、ここへ転送する
+moved_to = "haruxera.duckdns.org" # 公開の名前のうちこれ以外（Funnel）で開かれたページを、ここへ転送する
 
 # ── サイトの足し方 ─────────────────────────────────────────────
 # 静的ファイル（index.html のあるフォルダ）なら、次の形の [[site]] を1つ足すだけ:
@@ -67,7 +67,7 @@ moved_to = "haruxera.duckdns.org"   # 公開の名前のうちこれ以外（Fun
 [[site]]
 mount = "/news"
 python = "../News Site/work/app"
-entry = "newsreader.hosting:site"   # 名前と副題は News Site 側が返す
+entry = "newsreader.hosting:site" # 名前と副題は News Site 側が返す
 description = "BBC・中央社・聯合ニュースと、技術系の InfoQ・iThome などを毎時取得。原文と訳を並べ、同じニュースを各社で読み比べられます。"
 icon = "news"
 accent = "red"
@@ -98,7 +98,7 @@ icon = "terminal"
 accent = "teal"
 tags = ["インストール不要", "Linux 基礎から 19 ミッション", "架空データで安全"]
 home_link = "own"
-preview = "portal.json"            # 「すぐ遊べるミッション」（Infra Game 側で管理）
+preview = "portal.json" # 「すぐ遊べるミッション」（Infra Game 側で管理）
 
 [site.ko]
 subtitle = "인프라 운영 트레이닝 게임"

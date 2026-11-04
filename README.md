@@ -19,15 +19,26 @@ homepage/og.png       リンクを貼ったときのプレビュー画像（1200
 homepage/__main__.py  python -m homepage --demo: 一覧の見た目だけを試す小さなサーバー
 tests/                python -m unittest discover -s tests
 deploy/               クラウドの VM で配信する: 準備（setup.sh）、GitHub からの自動反映（update.sh）、PC からの移行（migrate.py）
+docs/CONVENTIONS.md   3 リポジトリ共通のルール（書式・ツール・CI・Git・サイトの約束）
 patches/              News Site へ渡したパッチの控え
 instance/             server.log など（git 管理外）
 ```
 
-書式は News Site・Infra Game と同じ（1 行 120 字・ダブルクォート・LF。`.editorconfig`・`.prettierrc.json`・`ruff.toml` は各リポジトリで同じファイル）。VS Code は推奨拡張（EditorConfig・Ruff・Prettier ほか）を入れると保存時に整形する。コマンドでは `uvx ruff format .`・`uvx ruff check .`（Python）と `npx prettier@3.9.10 --write .`（CSS・Markdown。page.html と patches/ は対象外）。
-
-GitHub に push すると Actions（`.github/workflows/ci.yml`）がテスト（Ubuntu と Windows）・Ruff・Prettier・ShellCheck を通す。VM は master を 1 分以内に配信するので、赤くなったらすぐ直す。
-
 Python 3.11 以上。サーバー用の仮想環境は `%LOCALAPPDATA%\HomePage\venvs\<フォルダのハッシュ>`（waitress と、各 Python サイトの requirements.txt）。
+
+## 書式とチェック
+
+News Site・Infra Game と共通のルール（1 行 120 字・ダブルクォート・LF ほか）。まとめは [docs/CONVENTIONS.md](docs/CONVENTIONS.md)。VS Code は推奨拡張（EditorConfig・Ruff・Prettier・Even Better TOML・ShellCheck ほか）を入れると保存時に整形する。
+
+```bash
+uvx ruff@0.16.9 format .   # Python の整形
+uvx ruff@0.16.9 check .    # Python のチェック
+npm install                # 初回だけ（Prettier と Taplo。サーバー自体は使わない）
+npm run format             # CSS・Markdown・JSON・YAML・TOML の整形
+npm run lint               # 整形済みかの確認
+```
+
+GitHub に push すると Actions（`.github/workflows/ci.yml`）がテスト（Ubuntu と Windows）・Ruff・Prettier・Taplo・ShellCheck を通す。VM は master を 1 分以内に配信するので、赤くなったらすぐ直す。page.html と patches/ は整形しない（`.prettierignore`）。
 
 ## 起動と切り替え
 
