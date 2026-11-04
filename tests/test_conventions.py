@@ -15,13 +15,17 @@ class ConventionsTest(unittest.TestCase):
     def setUp(self):
         self.guide = GUIDE.read_text(encoding="utf-8")
 
-    def test_the_ruff_version_is_the_one_ci_runs(self):
-        versions = set(re.findall(r"ruff@([\d.]+)", (ROOT / ".github" / "workflows" / "ci.yml").read_text("utf-8")))
-        self.assertEqual(len(versions), 1, versions)
-        (version,) = versions
-        self.assertIn(f"uvx ruff@{version} format .", self.guide)
-        self.assertRegex(self.guide, rf"\| Ruff +\| {re.escape(version)} +\|")
-        self.assertIn(f"uvx ruff@{version} format .", (ROOT / "README.md").read_text("utf-8"))
+    def test_the_uvx_tool_versions_are_the_ones_ci_runs(self):
+        ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text("utf-8")
+        readme = (ROOT / "README.md").read_text("utf-8")
+        tools = dict(re.findall(r"uvx (\w+)@([\d.]+)", ci))
+        self.assertEqual(set(tools), {"ruff", "taplo"})
+        for name, version in tools.items():
+            with self.subTest(name):
+                self.assertEqual(set(re.findall(rf"uvx {name}@([\d.]+)", ci)), {version}, "one version in ci.yml")
+                self.assertRegex(self.guide, rf"\| {name.capitalize()} +\| {re.escape(version)} +\|")
+                self.assertIn(f"uvx {name}@{version} ", self.guide)
+                self.assertIn(f"uvx {name}@{version} ", readme)
 
     def test_the_tool_versions_are_the_ones_in_package_json(self):
         tools = json.loads((ROOT / "package.json").read_text("utf-8"))["devDependencies"]

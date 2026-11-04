@@ -73,15 +73,16 @@
 | ----------------------------- | -------------------------------------------------- | ------------------------------------------------ |
 | Ruff                          | 0.16.9                                             | `ci.yml`（`uvx ruff@0.16.9`）、README のコマンド |
 | Prettier                      | 3.9.10                                             | `package.json`（3 リポジトリ）                   |
-| Taplo（`@taplo/cli`）         | 0.7.0                                              | `package.json`（home-page・news-site）           |
+| Taplo                         | 0.9.3                                              | `ci.yml`（`uvx taplo@0.9.3`）、README のコマンド |
 | ESLint・`@eslint/js`・globals | 10.14.0・10.0.1・17.14.0                           | `package.json`（news-site・infra-game）          |
 | Python                        | 3.12（書き方は 3.11 まで）                         | `ci.yml`（VM の Ubuntu 24.04 と同じ）            |
 | Node                          | 22                                                 | `ci.yml`                                         |
 | Actions                       | checkout・setup-python・setup-node v6、setup-uv v7 | `ci.yml`                                         |
 
 - `package.json` の版は `^` なしで固定する。`npm install` しておくと VS Code の Prettier・ESLint 拡張もリポジトリの版を使うので、保存時の整形と CI が一致する
-- Ruff の VS Code 拡張は拡張に入っている Ruff を使う。版の違いで差が出たら CI（0.16.9）が正しい
-- 版を上げるときは 3 リポジトリ同時に。`npm run format`・`uvx ruff@<新しい版> format .` で差分を見て、整形だけのコミットは `.git-blame-ignore-revs` へ
+- Ruff・Taplo の VS Code 拡張は拡張に入っている版を使う。版の違いで差が出たら CI が正しい
+- Ruff と Taplo はネイティブ版を `uvx`（PyPI）で動かす。npm の `@taplo/cli` は Windows でファイルを 1 つも見つけられず、チェックが素通りになるので使わない
+- 版を上げるときは 3 リポジトリ同時に。`npm run format`・`uvx ruff@<新しい版> format .`・`uvx taplo@<新しい版> fmt` で差分を見て、整形だけのコミットは `.git-blame-ignore-revs` へ
 - 新しいツールを足すときは、対になる VS Code 拡張も持ち主の VS Code に入れる（入れられないツールは使わない）
 
 ## コマンド
@@ -90,11 +91,14 @@
 
 ```bash
 npm install                 # 初回だけ（整形・チェック用のツール。サイト自体は使わない）
-npm run format              # Prettier・Taplo で整形
-npm run lint                # 整形済みかの確認（Prettier・Taplo）と ESLint（警告 0 件まで）
+npm run format              # Prettier で整形
+npm run lint                # 整形済みかの確認（Prettier）と ESLint（警告 0 件まで）
 uvx ruff@0.16.9 format .    # Python の整形（uv がなければ pip install ruff==0.16.9）
 uvx ruff@0.16.9 check .     # Python のチェック（--fix で直せるものは直す）
+uvx taplo@0.9.3 fmt         # TOML の整形（--check で確認だけ）
 ```
+
+uv のない PC（持ち主の PC もそう）では、Ruff と Taplo は VS Code の拡張が保存時に整形し、確認は CI に任せる。
 
 テストはリポジトリごと: home-page `python -m unittest discover -s tests`、news-site `python -m pytest tests -q`、infra-game `npm test`。
 
@@ -105,7 +109,7 @@ master は 1 分以内に VM から公開される。CI の赤が、公開前（
 - `.github/workflows/ci.yml`: すべてのブランチへの push と手動で動く（`pull_request` では動かさない。PR には枝の最後のコミットの結果が出るので二重になる）
 - `permissions: contents: read`、同じ枝の古い実行は止める（`concurrency: ci-${{ github.ref }}`）、各ジョブに `timeout-minutes`
 - Python のテストは `ubuntu-24.04`（VM と同じ）と `windows-latest`（持ち主の PC）の両方、`fail-fast: false`、`PYTHONUTF8: "1"`（Windows の runner は cp1252 で日本語を出せない）
-- 書式のジョブは Ruff（`uvx`、キャッシュなし）→ `npm ci` → `npm run lint`。JS だけのリポジトリは 1 ジョブで `npm ci`・`npm test`・`npm run lint`
+- 書式のジョブは Ruff・Taplo（`uvx`、キャッシュなし）→ `npm ci` → `npm run lint`。JS だけのリポジトリは 1 ジョブで `npm ci`・`npm test`・`npm run lint`
 - 警告も 0 件にしてから merge する。緑にするためにテストを飛ばしたり消したりしない
 - home-page の [`live.yml`](../.github/workflows/live.yml) は公開中のサイトを外から確かめる（6 時間ごと、master への push の 150 秒後、手動）。ページ・プレビュー画像・manifest・`/news/api/version`・robots.txt・セキュリティヘッダを見る（[`deploy/livecheck.py`](../deploy/livecheck.py)）。新しいサイトを足したらここにも足す
 
