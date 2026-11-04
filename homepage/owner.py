@@ -85,7 +85,9 @@ class Owner:
             info = self.path.stat()
         except OSError:
             return None
-        stamp = (info.st_mtime_ns, info.st_size)
+        # write() puts a new file in place, so its file number changes even when Windows gives it the old time
+        # (the clock there moves in steps of about 15 ms) and a password of the same length gives the same size.
+        stamp = (info.st_ino, info.st_mtime_ns, info.st_size)
         if stamp != self._stamp:
             try:
                 raw = json.loads(self.path.read_text(encoding="utf-8"))

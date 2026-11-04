@@ -5,6 +5,7 @@ from __future__ import annotations
 import http.client
 import importlib.util
 import io
+import os
 import shutil
 import socket
 import sys
@@ -336,7 +337,10 @@ class OwnerTests(unittest.TestCase):
         self.assertFalse(self.owner.signed_in({"HTTP_COOKIE": cookie}, now=5000 + owner.SECONDS + 1))
         self.assertFalse(self.owner.signed_in({"HTTP_COOKIE": "__Host-owner=garbage"}, now=5001))
         self.assertFalse(self.owner.signed_in({}, now=5001))
+        before = self.file.stat()
         owner.write("another long password", self.file)
+        # Windows' clock moves in steps of about 15 ms: a new file of the same size may carry the same time.
+        os.utime(self.file, ns=(before.st_atime_ns, before.st_mtime_ns))
         self.assertFalse(self.owner.signed_in({"HTTP_COOKIE": cookie}, now=5001))
         self.assertEqual(owner.without_cookie(f"lang=ko; {cookie}; theme=x"), "lang=ko; theme=x")
 
