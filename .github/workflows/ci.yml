@@ -42,7 +42,7 @@ jobs:
           shellcheck --severity=warning deploy/*.sh
 
   lint:
-    name: Style (Ruff, Prettier)
+    name: Style (Ruff, Prettier, Taplo)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -55,4 +55,6 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 22
-      - run: npx --yes prettier@3.9.10 --check .
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
