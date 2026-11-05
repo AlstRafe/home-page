@@ -345,6 +345,23 @@ name = "Gone"
         self.assertIn("/infra/", page)  # the last good list
         self.assertNotIn("読めませんでした", call(self.portal, "/", host=PUBLIC)[2])
 
+    def test_notes_the_deploy_scripts_left_are_shown_to_the_owner_only(self):
+        notes = self.tmp / "instance" / "owner-notes"
+        notes.mkdir(parents=True)
+        (notes / "deploy-key-val.txt").write_text(
+            "valorant-project をまだ取得できません。<登録してください>\n"
+            "https://github.com/AlstRafe/valorant-project/settings/keys/new\n"
+            "ssh-ed25519 AAAAC3Nza sites-server valorant-project\n",
+            encoding="utf-8",
+        )
+        page = call(self.portal, "/")[2]
+        self.assertIn("&lt;登録してください&gt;", page)
+        self.assertIn('<a href="https://github.com/AlstRafe/valorant-project/settings/keys/new"', page)
+        self.assertIn('<code class="copy">ssh-ed25519 AAAAC3Nza sites-server valorant-project</code>', page)
+        self.assertNotIn("ssh-ed25519", call(self.portal, "/", host=PUBLIC)[2])
+        (notes / "deploy-key-val.txt").unlink()  # the VM cloned it: the note goes at once
+        self.assertNotIn("ssh-ed25519", call(self.portal, "/")[2])
+
     def test_a_site_kept_from_the_public_name(self):
         self.write(
             self.config.read_text(encoding="utf-8").replace('home_link = "own"', 'home_link = "own"\npublic = false')

@@ -21,7 +21,7 @@ tests/                python -m unittest discover -s tests
 deploy/               クラウドの VM で配信する: 準備（setup.sh）、GitHub からの自動反映（update.sh）、PC からの移行（migrate.py）
 docs/CONVENTIONS.md   3 リポジトリ共通のルール（書式・ツール・CI・Git・サイトの約束）
 patches/              News Site へ渡したパッチの控え
-instance/             server.log など（git 管理外）
+instance/             server.log、owner-notes/（VM の setup.sh が一覧の持ち主欄に出すメモ）など（git 管理外）
 ```
 
 Python 3.11 以上。サーバー用の仮想環境は `%LOCALAPPDATA%\HomePage\venvs\<フォルダのハッシュ>`（waitress と、各 Python サイトの requirements.txt）。
