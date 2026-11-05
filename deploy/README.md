@@ -1,12 +1,12 @@
 # クラウドのサーバーで配信する（Oracle Cloud Always Free）
 
-PC を切っても `/`・`/news`・`/infra` が動き続けるように、Oracle Cloud の無料 VM で配信する。費用は 0 円（Always Free の範囲だけを使う）。
+PC を切っても `/`・`/news`・`/infra`・`/val` が動き続けるように、Oracle Cloud の無料 VM で配信する。費用は 0 円（Always Free の範囲だけを使う）。
 
 ## しくみ
 
 - **VM**: Oracle Cloud の Always Free、Arm の VM.Standard.A1.Flex（2 OCPU・12 GB、Ubuntu 24.04）
 - **公開**: Tailscale Funnel（`https://<名前>.<tailnet>.ts.net/`）。ポート開放もドメインもいらない。移行のときに PC の今のアドレスを VM に引き継ぐので、配ったリンクはそのまま使える。ただし Funnel は接続のたびに暗号化の握手で 0.7〜5 秒かかるので、速くするには下の「直接配信」で VM から直接配信する（DuckDNS の無料の名前と Caddy）
-- **コード**: GitHub の `home-page`・`news-site`・`infra-game`。VM が 1 分ごとに見に行き、**master** に push されたものに切り替える（`update.sh`。リポジトリの既定ブランチではなく、いつも master）。サーバーは新しいコードで自分で再起動する
+- **コード**: GitHub の `home-page`・`news-site`・`infra-game`・`valorant-project`。VM が 1 分ごとに見に行き、**master** に push されたものに切り替える（`update.sh`。リポジトリの既定ブランチではなく、いつも master）。サーバーは新しいコードで自分で再起動する
 - **データ**: News Site の DB・設定・記事は VM の中（`/srv/sites/News Site/work/app` の `instance/` と `articles/`）。git には入れない。毎時の収集も VM で動く。毎日 4:30 ごろ `instance/` を `/srv/sites/backup` に保存（14 日分）
 - **止められないために**: Always Free の VM は「7 日間、CPU・ネットワーク・メモリがどれも 20% 未満」だと Oracle に回収されることがある。`keepalive.py` がメモリの 25%（4 GB 以上のとき）と、毎晩 3〜5 時（日本時間）の 2 時間だけ CPU を使う。日中は何もしない（1/8 OCPU の VM では、どんなに譲っても使った分だけサイトが遅くなるため）
 
@@ -54,6 +54,17 @@ py -3 deploy\migrate.py
 - News Site のデータだけ PC から送り直す: `py -3 deploy\migrate.py --host <名前> --data-only`（VM にあったデータは `/srv/sites/backup` に移る）
 - 設定の入れ直し（何度実行してもよい）: `sudo bash "/srv/sites/Home Page/deploy/setup.sh"`
 
+## リポジトリ（サイト）を足す
+
+例: VAL Tracker（`valorant-project` → `/srv/sites/VALORANT-Project`、`/val`）。
+
+1. `deploy/setup.sh` と `deploy/update.sh` の `repos()` に `<リポジトリ名> "<フォルダ名>"` を足し、`sites.toml` に `[[site]]` を足して master へ（フォルダは PC と同じ並び。まだ取得していないサイトは一覧に出ないだけ）
+2. PC で `ssh -t haruxera-vm "sudo bash '/srv/sites/Home Page/deploy/setup.sh' --repos"` → 出た URL を開き、**Add deploy key** に鍵を貼る（Title は `sites-server`、Allow write access は付けない）
+3. 同じコマンドをもう一度。取得し、requirements.txt のパッケージを入れ、サーバーを再起動して読み込む
+4. `deploy/livecheck.py` の確認先にそのサイトを足す
+
+VM からの外向きの通信（HTTPS）は制限していないので、サイトが使う外部の API（VAL Tracker なら api.henrikdev.xyz・valorant-api.com・media.valorant-api.com）はそのまま使える。API キーが要るサイトは、持ち主のログインをした端末からそのサイトの設定ページで入れる（VAL Tracker は `/val/settings`）。
+
 ## 直接配信（Funnel より速い）
 
 Funnel は Tailscale の中継を通るので、新しい接続のたびに 0.7〜5 秒待つ（VM の中なら 0.05 秒）。VM の 443 番で Caddy が直接答えるようにすると、この待ちがなくなる。費用は 0 円のまま。
@@ -88,7 +99,7 @@ VM へは鍵の SSH でも入れる（Tailscale がなくてよい）: PC の公
 ```
 cloud-init.sh            VM を作るときに貼る（Tailscale に参加）
 migrate.py               PC で実行: VM の準備、データの移動、アドレスの引き継ぎ
-setup.sh                 VM の準備（何度実行してもよい）、--import / --funnel / --direct / --owner / --units / --sync
+setup.sh                 VM の準備（何度実行してもよい）、--repos / --import / --funnel / --direct / --owner / --units / --sync
 update.sh                1 分ごとに GitHub から取り込む（sites-update.timer）
 import_news_data.py      PC から来た News Site のデータを取り込む
 backup.py                News Site の instance/ を毎日保存（sites-backup.timer）
@@ -97,4 +108,4 @@ livecheck.py             公開アドレスを外から確かめる（GitHub Act
 systemd/                 homepage.service（サーバー）、news-collector.timer（毎時の収集）ほか
 ```
 
-VM の中の配置は PC と同じ並び（`/srv/sites/Home Page`・`/srv/sites/News Site/work/app`・`/srv/sites/Infra Game`）なので、sites.toml はそのまま使える。Python のパッケージは `/srv/sites/venv`、API キーは sites アカウントだけが読めるファイル（keyrings.alt）。
+VM の中の配置は PC と同じ並び（`/srv/sites/Home Page`・`/srv/sites/News Site/work/app`・`/srv/sites/Infra Game`・`/srv/sites/VALORANT-Project`）なので、sites.toml はそのまま使える。Python のパッケージは `/srv/sites/venv`、API キーは sites アカウントだけが読めるファイル（keyrings.alt）。

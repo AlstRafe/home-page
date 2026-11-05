@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Sets this Linux server up as the server of the sites: Home Page (the site list and the server
-# itself), News Site under /news and Infra Game (CoreLab) under /infra, each cloned from its GitHub
-# repository, served on https://<this machine>.<tailnet>.ts.net/ through Tailscale Funnel, or straight
-# from this machine on its own DuckDNS name (--direct).
+# itself), News Site under /news, Infra Game (CoreLab) under /infra and VAL Tracker under /val, each
+# cloned from its GitHub repository, served on https://<this machine>.<tailnet>.ts.net/ through
+# Tailscale Funnel, or straight from this machine on its own DuckDNS name (--direct).
 #
 #   sudo bash setup.sh                  first time, and again after adding the deploy keys it prints
+#   sudo bash setup.sh --repos          after a repository was added to repos(): makes its deploy key and
+#                                       prints it; once it is registered, again to clone it and load it
 #   sudo bash setup.sh --import FILE    take in News Site's data from the PC (made by migrate.py)
 #   sudo bash setup.sh --units          reinstall the systemd units only (update.sh does this when deploy/ changed)
 #   sudo bash setup.sh --funnel         publish port 5000 again (after the machine was renamed)
@@ -16,7 +18,7 @@
 #
 # Safe to run again: whatever is in place already is kept. Ubuntu 22.04 or newer.
 # Layout (the same relative places as on the PC, so sites.toml works as it is):
-#   /srv/sites/Home Page   /srv/sites/News Site/work/app   /srv/sites/Infra Game
+#   /srv/sites/Home Page   /srv/sites/News Site/work/app   /srv/sites/Infra Game   /srv/sites/VALORANT-Project
 #   /srv/sites/venv (Python packages)   /srv/sites/state   /srv/sites/backup
 set -euo pipefail
 
@@ -28,11 +30,14 @@ STATE="$ROOT/state"
 PORT=5000
 DIRECT=/etc/sites  # --direct: the DuckDNS name and its token (root only)
 PACKAGES=("waitress>=3.0,<4" "keyrings.alt>=5,<6")
+# Set when the running server has to start again to load what was put in place (reload_server).
+LOAD_AGAIN=""
 export PYTHON_KEYRING_BACKEND=keyrings.alt.file.PlaintextKeyring
 
-# GitHub repository <TAB> folder under /srv/sites
+# GitHub repository <TAB> folder under /srv/sites (the same list is in update.sh)
 repos() {
-  printf '%s\t%s\n' home-page "Home Page" news-site "News Site/work/app" infra-game "Infra Game"
+  printf '%s\t%s\n' home-page "Home Page" news-site "News Site/work/app" infra-game "Infra Game" \
+    valorant-project "VALORANT-Project"
 }
 
 as_site() { runuser -u "$ACCOUNT" -- env HOME="$ROOT" PYTHON_KEYRING_BACKEND="$PYTHON_KEYRING_BACKEND" "$@" </dev/null; }
@@ -114,6 +119,7 @@ clone_repos() {
     install -d -o "$ACCOUNT" -g "$ACCOUNT" "$(dirname "$ROOT/$dir")"
     as_site git clone -q -b master "git@github-$name:$OWNER/$name.git" "$ROOT/$dir"
     echo "$dir: 取得しました"
+    LOAD_AGAIN=1
   done < <(repos)
   if [ ${#missing[@]} -gt 0 ]; then
     echo
@@ -128,13 +134,25 @@ clone_repos() {
   fi
 }
 
+# The requirements.txt of each repository cloned here that has one: the Python sites (News Site, VAL Tracker).
+requirement_files() {
+  local name dir
+  while IFS=$'\t' read -r name dir; do
+    if [ -f "$ROOT/$dir/requirements.txt" ]; then
+      printf '%s\n' "$ROOT/$dir/requirements.txt"
+    fi
+  done < <(repos)
+}
+
 requirements_stamp() {
-  { printf '%s\n' "${PACKAGES[@]}"; cat "$ROOT/News Site/work/app/requirements.txt"; } | sha256sum | cut -d' ' -f1
+  local files=()
+  mapfile -t files < <(requirement_files)
+  { printf '%s\n' "${PACKAGES[@]}"; [ ${#files[@]} -eq 0 ] || cat "${files[@]}"; } | sha256sum | cut -d' ' -f1
 }
 
 # Every minute (update.sh): nothing but a checksum while the venv and the packages are in place.
 install_python_packages() {
-  local stamp
+  local stamp file files=() wanted=()
   stamp="$(requirements_stamp)"
   if [ -x "$VENV/bin/python" ] && [ "$(cat "$STATE/requirements" 2>/dev/null)" = "$stamp" ]; then
     return 0
@@ -145,10 +163,25 @@ install_python_packages() {
   if [ "$(cat "$STATE/requirements" 2>/dev/null)" != "$stamp" ]; then
     say "Python のパッケージ"
     as_site "$VENV/bin/python" -m pip install -q --upgrade pip
-    as_site "$VENV/bin/python" -m pip install -q "${PACKAGES[@]}" -r "$ROOT/News Site/work/app/requirements.txt"
+    mapfile -t files < <(requirement_files)
+    for file in "${files[@]}"; do
+      wanted+=(-r "$file")
+    done
+    as_site "$VENV/bin/python" -m pip install -q "${PACKAGES[@]}" "${wanted[@]}"
     echo "$stamp" > "$STATE/requirements"
     "$VENV/bin/python" --version
+    LOAD_AGAIN=1
   fi
+}
+
+# The server loads the Python sites and their packages once, at its start (a site's new commit restarts it by
+# itself, possibly before its new packages are in): after a new repository or new packages, start it again.
+reload_server() {
+  if [ -n "$LOAD_AGAIN" ] && systemctl is-active --quiet homepage.service; then
+    systemctl restart homepage.service
+    echo "サーバーを再起動しました（新しいリポジトリかパッケージを読み込むため）"
+  fi
+  LOAD_AGAIN=""
 }
 
 # News Site's VERSION (ignored by git) names the commit being served; the server restarts into
@@ -196,6 +229,7 @@ sync_changes() {
   fi
   install_python_packages
   write_version
+  reload_server
   if [ -f "$DIRECT/duckdns" ] && render_caddyfile; then
     systemctl reload caddy || systemctl restart caddy
   fi
@@ -367,13 +401,14 @@ main() {
   [ "$(id -u)" = 0 ] || { echo "sudo bash $0 で実行してください" >&2; exit 1; }
   case "${1:-}" in
     --units) install_units; return ;;
+    --repos) make_keys; clone_repos; install_python_packages; reload_server; return ;;
     --funnel) publish; return ;;
     --direct) direct "${2:-}"; return ;;
     --owner) owner_password "${2:-}"; return ;;
     --sync) sync_changes; return ;;
     --import) import_data "${2:?取り込むファイルを指定してください}"; wait_until_answering; return ;;
     "") ;;
-    *) echo "使い方: sudo bash setup.sh [--import FILE | --units | --funnel | --direct NAME | --owner [off] | --sync]" >&2; exit 2 ;;
+    *) echo "使い方: sudo bash setup.sh [--repos | --import FILE | --units | --funnel | --direct NAME | --owner [off] | --sync]" >&2; exit 2 ;;
   esac
   install_packages
   add_swap
@@ -383,6 +418,7 @@ main() {
   say "Python の環境"
   install_python_packages
   write_version
+  reload_server  # a run again on a machine that serves already; the first time, install_units starts it
   install_units
   wait_until_answering
   publish

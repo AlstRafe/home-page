@@ -114,3 +114,28 @@ tags = ["Nothing to install", "19 missions from Linux basics up", "Safe: all dat
 subtitle = "基礎架構維運訓練遊戲"
 description = "在瀏覽器裡的終端機排除 Kubernetes、Docker、Harbor、OpenShift、AWS 的常見故障，邊做邊學。另有 333 題分領域練習題（涵蓋 60 項認證考試）與指令辭典。所有操作都是使用虛構資料的模擬。"
 tags = ["免安裝", "從 Linux 基礎開始的 19 個任務", "虛構資料，安全無虞"]
+
+[[site]]
+mount = "/val"
+python = "../VALORANT-Project"
+entry = "valtracker.hosting:site" # 名前と副題は VAL Tracker 側が返す
+description = "Riot ID でランクと最近の試合を調べ、お気に入りに登録できる VALORANT のトラッカー。エージェントの能力も見られます。"
+icon = "game"
+accent = "red"
+tags = ["登録不要", "スマホ対応", "4 言語"]
+home_link = "own"
+
+[site.ko]
+subtitle = "VALORANT 전적 트래커"
+description = "Riot ID로 랭크와 최근 경기를 조회하고 즐겨찾기에 등록할 수 있는 VALORANT 트래커입니다. 요원의 스킬도 볼 수 있습니다."
+tags = ["회원가입 불필요", "스마트폰 지원", "4개 언어"]
+
+[site.en-GB]
+subtitle = "VALORANT stats tracker"
+description = "A VALORANT tracker: look up a player's rank and recent matches by Riot ID, and save them to your favourites. You can also see what each agent's abilities do."
+tags = ["No sign-up", "Works on phones", "4 languages"]
+
+[site.zh-TW]
+subtitle = "VALORANT 戰績查詢"
+description = "用 Riot ID 查詢牌位與近期對戰，並可加入我的最愛的 VALORANT 戰績查詢網站。也能查看各特務的技能。"
+tags = ["免註冊", "支援手機", "4 種語言"]
