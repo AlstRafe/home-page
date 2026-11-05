@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Brings the three repositories up to their master on GitHub and puts what changed into effect. Run
+# Brings the repositories up to their master on GitHub and puts what changed into effect. Run
 # every minute by sites-update.timer (as root; git runs as the sites account). The server copies are
 # never edited by hand: a push to master (even a force push) is what they become. master, not the
 # repository's default branch: a clone follows the default branch, which need not be master (Infra
@@ -14,6 +14,8 @@
 #   requirements.txt installs the packages first (setup.sh --sync). The collector runs the new code
 #   at its next hour.
 # - Infra Game: static files, served as they are at once.
+# - VAL Tracker: the server sees the new commit in its .git and restarts; a changed requirements.txt
+#   installs the packages (setup.sh --sync), then the server is started again with them.
 set -euo pipefail
 
 ROOT=/srv/sites
@@ -22,8 +24,10 @@ HOME_PAGE="$ROOT/Home Page"
 
 as_site() { runuser -u "$ACCOUNT" -- env HOME="$ROOT" "$@" </dev/null; }
 
+# The same list as setup.sh's (a repository not cloned yet is skipped: setup.sh --repos clones it).
 repos() {
-  printf '%s\t%s\n' home-page "Home Page" news-site "News Site/work/app" infra-game "Infra Game"
+  printf '%s\t%s\n' home-page "Home Page" news-site "News Site/work/app" infra-game "Infra Game" \
+    valorant-project "VALORANT-Project"
 }
 
 while IFS=$'\t' read -r name dir; do

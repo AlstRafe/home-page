@@ -111,4 +111,4 @@ News Site へ渡したパッチの控えは `patches/` にある（どれも取�
 
 ## 今後の候補
 
-- サイトを足したら og.png（一覧のプレビュー画像。いまは NewsBridge と CoreLab のカード）も作り直す
+- サイトを足したら og.png（一覧のプレビュー画像。いまは NewsBridge・CoreLab・VAL Tracker のカード）も作り直す
