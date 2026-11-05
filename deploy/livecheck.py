@@ -99,11 +99,12 @@ def check(base: str) -> list[str]:
                 problems.append(f"{path}: {needed!r} がありません")
         return headers, text
 
-    headers, page = get("/", "text/html", "<h1>", "/news/", "/infra/")
+    headers, page = get("/", "text/html", "<h1>", "/news/", "/infra/", "/val/")
     for name in ("Strict-Transport-Security", "Content-Security-Policy", "X-Content-Type-Options"):
         if name not in headers:
             problems.append(f"/: {name} ヘッダがありません")
-    for path, html in (("/", page), ("/infra/", get("/infra/", "text/html", "CoreLab")[1])):
+    sites = (("/infra/", "CoreLab"), ("/val/", "VAL Tracker"))
+    for path, html in (("/", page), *((path, get(path, "text/html", name)[1]) for path, name in sites)):
         image = meta(html, "og:image")
         if not image.startswith(base + "/"):
             problems.append(f"{path}: og:image が公開アドレスの完全な URL ではありません（{image!r}）")
@@ -114,6 +115,12 @@ def check(base: str) -> list[str]:
     get("/news/manifest.webmanifest", "application/")
     _, version = get("/news/api/version", "application/json", '"version"')
     print(f"News Site: {version.strip()}")
+    # VAL Tracker's agents and their pictures come from valorant-api.com and media.valorant-api.com through
+    # the VM (saved there once fetched): no pictures means the VM could not reach them.
+    _, agents = get("/val/agents", "text/html", "/val/media/")
+    picture = re.search(r'src="(/val/media/[^"]+)"', agents)
+    if picture:
+        get(picture.group(1), "image/png")
     get("/robots.txt", "text/plain", "User-agent")
     return problems
 
