@@ -523,6 +523,28 @@ footer p {
   color: var(--warn);
   font-weight: 600;
 }
+/* A note the deploy scripts left (the VM's deploy key): the key is selected whole with one tap. */
+.left-note {
+  margin: 0.4rem 0 0.6rem;
+  padding: 0.5rem 0.8rem;
+  border-left: 3px solid var(--warn);
+}
+.left-note p {
+  margin: 0.25rem 0;
+}
+.left-note a {
+  overflow-wrap: anywhere;
+}
+.left-note .copy {
+  display: block;
+  padding: 0.4rem 0.5rem;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  font: 0.78rem/1.5 var(--mono);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
 
 /* 404 */
 .missing {

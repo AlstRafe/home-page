@@ -207,6 +207,9 @@ class Portal:
         #: owner's notes nor the sites marked ``public = false``.
         self.visitor_hosts = visitor_hosts
         self.config = Path(config)
+        #: Notes the deploy scripts leave for the owner (``*.txt``): on the VM, the deploy key a repository
+        #: that cannot be cloned yet needs on GitHub (setup.sh), so it can be done from a phone.
+        self.owner_notes = self.config.parent / "instance" / "owner-notes"
         self._lock = threading.Lock()
         self._checked = 0.0
         self._stamp: tuple | None = None  # None: not read yet
@@ -524,6 +527,27 @@ class Portal:
             f'<p class="go"><a class="open" href="{href}">{e(label)}<span class="arrow" aria-hidden="true">→</span></a>{status}</p>\n</li>'
         )
 
+    def _left_notes(self) -> list[str]:
+        try:
+            files = sorted(self.owner_notes.glob("*.txt"))[:10]
+            return [item.read_text(encoding="utf-8")[:4000] for item in files]
+        except OSError:
+            return []
+
+    @staticmethod
+    def _left_note(text: str) -> str:
+        """A note's lines: an https address as a link, a key (``ssh-...``) to copy whole, the rest as text."""
+        e = html.escape
+        parts = []
+        for line in filter(None, (line.strip() for line in text.splitlines())):
+            if line.startswith("https://") and " " not in line:
+                parts.append(f'<p><a href="{e(line)}" rel="noreferrer">{e(line)}</a></p>')
+            elif line.startswith("ssh-"):
+                parts.append(f'<p><code class="copy">{e(line)}</code></p>')
+            else:
+                parts.append(f"<p>{e(line)}</p>")
+        return f'<div class="left-note" role="status">{"".join(parts)}</div>'
+
     @staticmethod
     def _icon(site: Site) -> str:
         svg = _icon_svg(site.icon) if site.icon else ""
@@ -536,6 +560,7 @@ class Portal:
         e = html.escape
         problems = "".join(f"<li>{e(p)}</li>" for p in self.problems)
         problems = f'<ul class="problems" role="status">{problems}</ul>' if problems else ""
+        problems += "".join(self._left_note(text) for text in self._left_notes())
         signed = '<p><a href="/owner">持ち主としてログイン中です（ログアウト）</a></p>' if signed_in else ""
         return (
             f'<div class="owner"><h2>このPCの持ち主向け</h2>{problems}{signed}'

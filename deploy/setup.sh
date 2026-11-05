@@ -6,7 +6,8 @@
 #
 #   sudo bash setup.sh                  first time, and again after adding the deploy keys it prints
 #   sudo bash setup.sh --repos          after a repository was added to repos(): makes its deploy key and
-#                                       prints it; once it is registered, again to clone it and load it
+#                                       prints it; once it is registered, again to clone it and load it (--sync
+#                                       does the same every minute and shows the key on the site list's owner part)
 #   sudo bash setup.sh --import FILE    take in News Site's data from the PC (made by migrate.py)
 #   sudo bash setup.sh --units          reinstall the systemd units only (update.sh does this when deploy/ changed)
 #   sudo bash setup.sh --funnel         publish port 5000 again (after the machine was renamed)
@@ -29,6 +30,7 @@ VENV="$ROOT/venv"
 STATE="$ROOT/state"
 PORT=5000
 DIRECT=/etc/sites  # --direct: the DuckDNS name and its token (root only)
+NOTES="$ROOT/Home Page/instance/owner-notes"  # shown to the owner on the site list (homepage: Portal.owner_notes)
 PACKAGES=("waitress>=3.0,<4" "keyrings.alt>=5,<6")
 # Set when the running server has to start again to load what was put in place (reload_server).
 LOAD_AGAIN=""
@@ -99,27 +101,55 @@ make_keys() {
     printf 'Host github-%s\n  HostName github.com\n  User git\n  IdentityFile %s\n  IdentitiesOnly yes\n  StrictHostKeyChecking accept-new\n\n' \
       "$name" "$ROOT/.ssh/deploy_$name" >> "$config.new"
   done < <(repos)
+  if cmp -s "$config.new" "$config"; then
+    rm -f "$config.new"
+    return 0
+  fi
   mv "$config.new" "$config"
   chown "$ACCOUNT:$ACCOUNT" "$config"
   chmod 600 "$config"
 }
 
+# Clones one repository. 1: GitHub does not take its deploy key (not registered yet); 2: the clone failed.
+clone_repo() {
+  local name="$1" dir="$2"
+  as_site timeout 30 git ls-remote -q "git@github-$name:$OWNER/$name.git" HEAD >/dev/null 2>&1 || return 1
+  install -d -o "$ACCOUNT" -g "$ACCOUNT" "$(dirname "$ROOT/$dir")" || return 2
+  as_site git clone -q -b master "git@github-$name:$OWNER/$name.git" "$ROOT/$dir" || return 2
+  rm -f "$NOTES/deploy-key-$name.txt"
+  echo "$dir: 取得しました"
+  LOAD_AGAIN=1
+}
+
+# The key to register, on the site list for the owner (signed in at /owner), so that a phone will do.
+leave_key_note() {
+  local name="$1" dir="$2" file="$NOTES/deploy-key-$1.txt"
+  [ -d "$ROOT/Home Page/.git" ] || return 0  # the very first setup: the list itself is not here yet
+  as_site mkdir -p "$NOTES"
+  as_site sh -c 'f="$1"; shift; printf "%s\n" "$@" > "$f.tmp"; if cmp -s "$f.tmp" "$f"; then rm -f "$f.tmp"; else mv "$f.tmp" "$f"; fi' \
+    - "$file" \
+    "$dir（GitHub の $name）をまだ取得できません。下のページで、その下の鍵を Deploy key として登録してください（Title は sites-server、Allow write access は付けない）。登録すると 1 分ほどでサーバーが取得して読み込み、この欄は消えます。" \
+    "https://github.com/$OWNER/$name/settings/keys/new" \
+    "$(cat "$ROOT/.ssh/deploy_$name.pub")"
+}
+
 clone_repos() {
   say "GitHub のリポジトリ（$OWNER）"
-  local name dir missing=()
+  local name dir status missing=()
   while IFS=$'\t' read -r name dir; do
     if [ -d "$ROOT/$dir/.git" ]; then
       echo "$dir: あり"
       continue
     fi
-    if ! as_site git ls-remote -q "git@github-$name:$OWNER/$name.git" HEAD >/dev/null 2>&1; then
+    status=0
+    clone_repo "$name" "$dir" || status=$?
+    if [ "$status" = 1 ]; then
       missing+=("$name")
-      continue
+      leave_key_note "$name" "$dir"
+    elif [ "$status" != 0 ]; then
+      echo "$dir: 取得できませんでした" >&2
+      exit 1
     fi
-    install -d -o "$ACCOUNT" -g "$ACCOUNT" "$(dirname "$ROOT/$dir")"
-    as_site git clone -q -b master "git@github-$name:$OWNER/$name.git" "$ROOT/$dir"
-    echo "$dir: 取得しました"
-    LOAD_AGAIN=1
   done < <(repos)
   if [ ${#missing[@]} -gt 0 ]; then
     echo
@@ -132,6 +162,25 @@ clone_repos() {
     done
     exit 3
   fi
+}
+
+# Every minute (update.sh): a repository added to repos() gets its deploy key, and is cloned as soon as GitHub
+# takes the key; until then the site list shows the owner the key to register (leave_key_note).
+fetch_new_repos() {
+  local name dir status
+  while IFS=$'\t' read -r name dir; do
+    if [ -d "$ROOT/$dir/.git" ]; then
+      continue
+    fi
+    [ -f "$ROOT/.ssh/deploy_$name" ] || make_keys
+    status=0
+    clone_repo "$name" "$dir" || status=$?
+    if [ "$status" = 1 ]; then
+      leave_key_note "$name" "$dir"
+    elif [ "$status" != 0 ]; then
+      echo "$dir: 取得できませんでした（次の回にもう一度）"
+    fi
+  done < <(repos)
 }
 
 # The requirements.txt of each repository cloned here that has one: the Python sites (News Site, VAL Tracker).
@@ -227,6 +276,7 @@ sync_changes() {
     systemctl try-restart sites-keepalive.service  # runs the new keepalive.py; the server is left alone
     keepalive_stamp > "$STATE/keepalive"
   fi
+  fetch_new_repos
   install_python_packages
   write_version
   reload_server

@@ -59,8 +59,8 @@ py -3 deploy\migrate.py
 例: VAL Tracker（`valorant-project` → `/srv/sites/VALORANT-Project`、`/val`）。
 
 1. `deploy/setup.sh` と `deploy/update.sh` の `repos()` に `<リポジトリ名> "<フォルダ名>"` を足し、`sites.toml` に `[[site]]` を足して master へ（フォルダは PC と同じ並び。まだ取得していないサイトは一覧に出ないだけ）
-2. PC で `ssh -t haruxera-vm "sudo bash '/srv/sites/Home Page/deploy/setup.sh' --repos"` → 出た URL を開き、**Add deploy key** に鍵を貼る（Title は `sites-server`、Allow write access は付けない）
-3. 同じコマンドをもう一度。取得し、requirements.txt のパッケージを入れ、サーバーを再起動して読み込む
+2. 1 分ほどで VM が鍵を作り、サイト一覧の持ち主欄（持ち主としてログインした端末で `https://haruxera.duckdns.org/`。スマホでよい）に登録先と鍵が出る。そのページの **Add deploy key** に鍵を貼る（Title は `sites-server`、Allow write access は付けない）
+3. 1 分ほどで VM が取得し、requirements.txt のパッケージを入れ、サーバーを再起動して読み込む（持ち主欄の鍵は消える）。PC から今すぐなら `ssh -t haruxera-vm "sudo bash '/srv/sites/Home Page/deploy/setup.sh' --repos"`（鍵の表示、登録後にもう一度で取得）
 4. `deploy/livecheck.py` の確認先にそのサイトを足す
 
 VM からの外向きの通信（HTTPS）は制限していないので、サイトが使う外部の API（VAL Tracker なら api.henrikdev.xyz・valorant-api.com・media.valorant-api.com）はそのまま使える。API キーが要るサイトは、持ち主のログインをした端末からそのサイトの設定ページで入れる（VAL Tracker は `/val/settings`）。
