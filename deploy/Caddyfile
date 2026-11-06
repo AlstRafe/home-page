@@ -13,5 +13,10 @@
 # Home Page answers this name as a visitor's (HOME_PUBLIC_HOSTS), as it does the Funnel name. Requests
 # under any other name never get past Caddy, so none reaches the server as the owner's (localhost).
 @NAME@ {
-    reverse_proxy 127.0.0.1:5000
+    reverse_proxy 127.0.0.1:5000 {
+        # New code restarts the server (update.sh), and its port is closed for about a minute on this
+        # VM's eighth of a CPU: a request then waits for it to be back, instead of answering 502.
+        lb_try_duration 90s
+        lb_try_interval 250ms
+    }
 }

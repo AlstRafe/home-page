@@ -40,6 +40,13 @@ jobs:
         run: |
           bash -n deploy/setup.sh deploy/update.sh deploy/cloud-init.sh
           shellcheck --severity=warning deploy/*.sh
+      - name: The VM's Caddyfile (Ubuntu's own Caddy, as on the VM)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q caddy
+          sed -e 's/@NAME@/example.duckdns.org/g' -e 's/@BIND@/127.0.0.1/g' deploy/Caddyfile > "$RUNNER_TEMP/Caddyfile"
+          caddy validate --adapter caddyfile --config "$RUNNER_TEMP/Caddyfile"
 
   lint:
     name: Style (Ruff, Prettier, Taplo)
