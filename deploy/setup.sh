@@ -294,14 +294,21 @@ own_address() {
   ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p' | head -n 1
 }
 
-# /etc/caddy/Caddyfile from deploy/Caddyfile. Succeeds only when that changed the file.
+# /etc/caddy/Caddyfile from deploy/Caddyfile. Succeeds only when that changed the file. A file Caddy
+# would not take is never put in place: the running Caddy keeps the old one (a restart with a broken
+# file would stop every site).
 render_caddyfile() {
-  local name bind target=/etc/caddy/Caddyfile
+  local name bind said target=/etc/caddy/Caddyfile
   name="$(direct_domain).duckdns.org"
   bind="$(own_address)"
   [ -n "$bind" ] || { echo "この VM のアドレスが分かりません" >&2; return 1; }
   sed -e "s/@NAME@/$name/g" -e "s/@BIND@/$bind/g" "$ROOT/Home Page/deploy/Caddyfile" > "$target.new"
   if cmp -s "$target.new" "$target"; then
+    rm -f "$target.new"
+    return 1
+  fi
+  if ! said="$(caddy validate --adapter caddyfile --config "$target.new" 2>&1)"; then
+    echo "deploy/Caddyfile を Caddy が受け付けないので、今の設定のままにします: ${said: -300}" >&2
     rm -f "$target.new"
     return 1
   fi
