@@ -420,6 +420,31 @@ name = "Gone"
         self.assertIn('<a href="/news/">NewsBridge</a>', page)
         self.assertNotIn('class="now"', page)
 
+    def test_an_odd_preview_shows_what_it_can_and_never_breaks_the_index(self):
+        odd = {"title": 3, "note": None, "items": [("a", "/a", "extra"), ("b",), "c", (None, "/d"), ("e", "/e")]}
+        portal = homepage.build(
+            [homepage.App("news", "/news", news, "NewsBridge", preview=lambda: odd)], config=self.config
+        )
+        status, _, page = call(portal, "/")
+        self.assertEqual(status, 200)
+        self.assertIn('<li><a href="/news/e">e</a></li>', page)  # the one well-formed item
+        self.assertNotIn('href="/news/a"', page)
+        self.assertIn('<p class="now-head">新着</p>', page)  # no title of its own: the usual heading
+        portal = homepage.build(
+            [homepage.App("news", "/news", news, "NewsBridge", preview=lambda: [1])], config=self.config
+        )
+        self.assertEqual(call(portal, "/")[0], 200)
+
+    def test_addresses_with_letters_outside_ascii_or_a_percent_sign(self):
+        tokyo = "東京".encode().decode("latin-1")  # WSGI: the path's bytes as latin-1 (PEP 3333)
+        status, headers, _ = call(self.portal, f"/news/s/{tokyo}?lang=ko")
+        self.assertEqual((status, headers["Location"]), (302, "/news/s/%E6%9D%B1%E4%BA%AC"))
+        self.assertEqual(call(self.portal, "/news/s/100%?lang=ko")[1]["Location"], "/news/s/100%25")
+        (self.game / "写真.js").write_text("3;", encoding="utf-8")
+        status, _, body = call(self.portal, "/infra/" + "写真.js".encode().decode("latin-1"))
+        self.assertEqual((status, body), (200, "3;"))
+        self.assertEqual(call(self.portal, "/infra/写真.js")[0], 200)  # text already (not from a WSGI server)
+
     def test_one_language_for_every_site_chosen_by_the_visitor(self):
         status, headers, _ = call(self.portal, "/news/a/7?tr=ja&lang=ko")
         self.assertEqual((status, headers["Location"]), (302, "/news/a/7?tr=ja"))

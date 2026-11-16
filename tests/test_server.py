@@ -91,6 +91,12 @@ entry = "nothing:site"
         self.config.write_text("port = [", encoding="utf-8")
         self.assertIsNone(server.settings_stamp(self.config))  # half written: no restart for it
         self.assertEqual(server.read_settings(self.config).port, 5000)
+        for port in ("true", "0", "70000", '"5001"'):
+            with self.subTest(port=port):
+                self.config.write_text(f"[server]\nport = {port}\n", encoding="utf-8")
+                self.assertEqual(server.read_settings(self.config).port, 5000)
+        self.config.write_text('[server]\nhosts = ["MyPC.local:5000", "[fd00::1]", " ", 3]\n', encoding="utf-8")
+        self.assertEqual(server.read_settings(self.config).hosts, ("mypc.local", "fd00::1"))
 
     def test_code_changes_are_seen(self):
         package = self.tmp / "Shop" / "shopsite"
@@ -391,7 +397,7 @@ class OwnerTests(unittest.TestCase):
         self.assertIn('href="/owner"', page)
         self.assertNotIn('href="/owner"', call(portal, "/", host=self.PUBLIC, **{server.VISITOR_KEY: True})[2])
         self.assertNotIn('href="/owner"', call(portal, "/", host="haruxera")[2])  # the own names need no login
-        self.assertEqual(call(portal, "/owner", host="haruxera")[:2][0], 302)
+        self.assertEqual(call(portal, "/owner", host="haruxera")[0], 302)
 
 
 class LauncherTests(unittest.TestCase):
@@ -420,6 +426,12 @@ class LauncherTests(unittest.TestCase):
             self.launcher.CONFIG = tmp / "sites.toml"
             port, files = self.launcher.server_settings()
             self.assertEqual((port, files), (5123, [(tmp / "App" / "requirements.txt").resolve()]))
+            for wrong in ("true", "70000"):  # the server starts on 5000 then, so the launcher looks there
+                (tmp / "other.toml").write_text(f"[server]\nport = {wrong}\nsite = 5\n", encoding="utf-8")
+                self.launcher.CONFIG = tmp / "other.toml"
+                self.assertEqual(self.launcher.server_settings(), (5000, []))
+                self.assertEqual(self.launcher.python_site_servers(), [])
+            self.launcher.CONFIG = tmp / "sites.toml"
             before = self.launcher.requirements_digest(files)
             (tmp / "App" / "requirements.txt").write_text("flask\nwaitress\n", encoding="utf-8")
             self.assertNotEqual(self.launcher.requirements_digest(files), before)

@@ -15,13 +15,18 @@ Needs Python 3.11 or newer.
 
 from __future__ import annotations
 
+import sys
+
+# Before the imports below: tomllib is new in 3.11, and start.bat (py -3) may find an older Python first.
+if sys.version_info < (3, 11):  # noqa: UP036
+    sys.exit("Python 3.11 以上が必要です。")
+
 import hashlib
 import json
 import os
 import shutil
 import socket
 import subprocess
-import sys
 import time
 import tomllib
 import venv
@@ -58,7 +63,10 @@ def server_settings() -> tuple[int, list[Path]]:
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
         return 5000, []
     server = data.get("server") if isinstance(data.get("server"), dict) else {}
-    port = server.get("port", 5000) if isinstance(server.get("port", 5000), int) else 5000
+    port = server.get("port", 5000)
+    # The server's own rule (homepage/server.py valid_port): it starts on 5000 otherwise, so look there.
+    if not isinstance(port, int) or isinstance(port, bool) or not 1 <= port <= 65535:
+        port = 5000
     sites = data.get("site") if isinstance(data.get("site"), list) else []
     files = [
         (CONFIG.parent / str(entry["python"])).resolve() / "requirements.txt"
@@ -215,7 +223,8 @@ def answering(port: int) -> bool:
 
 def network_up() -> bool:
     """Tailscale's or the LAN's address is there (loopback alone means: not up yet)."""
-    sys.path.insert(0, str(HOME))
+    if str(HOME) not in sys.path:
+        sys.path.insert(0, str(HOME))
     from homepage.server import Settings, addresses
 
     return len(addresses(Settings())) > 1
@@ -276,9 +285,10 @@ def python_site_servers() -> list[int]:
         data = tomllib.loads(CONFIG.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
         return []
+    sites = data.get("site") if isinstance(data.get("site"), list) else []
     folders = [
         str((CONFIG.parent / entry["python"]).resolve()).casefold()
-        for entry in data.get("site", [])
+        for entry in sites
         if isinstance(entry, dict) and isinstance(entry.get("python"), str)
     ]
     if os.name != "nt" or not folders:
@@ -343,9 +353,6 @@ def take_over(port: int) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
-    if sys.version_info < (3, 11):  # noqa: UP036 -- start.bat may find an older Python first
-        print("Python 3.11 以上が必要です。", file=sys.stderr)
-        return 1
     port, _ = server_settings()
     if "--no-logon" in argv:
         ensure_logon_task(False)

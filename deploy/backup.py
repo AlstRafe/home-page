@@ -24,25 +24,30 @@ def main(argv: list[str]) -> int:
         print(__doc__, file=sys.stderr)
         return 2
     instance, folder = Path(argv[0]), Path(argv[1])
-    keep = int(argv[2]) if len(argv) == 3 else 14
+    keep = max(1, int(argv[2])) if len(argv) == 3 else 14  # 0 would delete the copy just made too
     folder.mkdir(parents=True, exist_ok=True)
     target = folder / f"news-instance-{datetime.now():%Y%m%d-%H%M%S}.tar.gz"
-    with tempfile.TemporaryDirectory(dir=folder) as temporary, tarfile.open(target.with_suffix(".part"), "w:gz") as tar:
-        for path in sorted(instance.iterdir()):
-            if not path.is_file() or path.name in SKIP or path.name.endswith(("-wal", "-shm", "-journal")):
-                continue
-            if path.suffix == ".sqlite3":
-                copy = Path(temporary) / path.name
-                source, dest = sqlite3.connect(f"file:{path}?mode=ro", uri=True), sqlite3.connect(copy)
-                try:
-                    source.backup(dest)
-                finally:
-                    source.close()
-                    dest.close()
-                tar.add(copy, arcname=f"instance/{path.name}")
-            else:
-                tar.add(path, arcname=f"instance/{path.name}")
-    target.with_suffix(".part").rename(target)
+    part = target.with_suffix(".part")
+    try:
+        with tempfile.TemporaryDirectory(dir=folder) as temporary, tarfile.open(part, "w:gz") as tar:
+            for path in sorted(instance.iterdir()):
+                if not path.is_file() or path.name in SKIP or path.name.endswith(("-wal", "-shm", "-journal")):
+                    continue
+                if path.suffix == ".sqlite3":
+                    copy = Path(temporary) / path.name
+                    source, dest = sqlite3.connect(f"file:{path}?mode=ro", uri=True), sqlite3.connect(copy)
+                    try:
+                        source.backup(dest)
+                    finally:
+                        source.close()
+                        dest.close()
+                    tar.add(copy, arcname=f"instance/{path.name}")
+                else:
+                    tar.add(path, arcname=f"instance/{path.name}")
+    except BaseException:
+        part.unlink(missing_ok=True)  # a half-written copy is no backup (and would pile up night after night)
+        raise
+    part.rename(target)
     target.chmod(0o600)
     old = sorted(folder.glob("news-instance-*.tar.gz"))[:-keep]
     for path in old:
