@@ -28,6 +28,7 @@ import time
 import tomllib
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from email.utils import formatdate
 from pathlib import Path
 from urllib.parse import quote, urljoin
 
@@ -52,6 +53,8 @@ VISITOR_KEY = "homepage.visitor"
 OWNER_KEY = "homepage.owner"
 #: Files of this package served as they are: address -> (file, type).
 FILES = {
+    # The index asks for it at its version (?v=); sent gzipped to browsers that take it.
+    "/portal.css": ("portal.css", "text/css; charset=utf-8"),
     "/favicon.svg": ("favicon.svg", "image/svg+xml"),
     # The icon a phone puts on its home screen (iPhones also ask for it at this address by themselves).
     "/apple-touch-icon.png": ("apple-touch-icon.png", "image/png"),
@@ -181,8 +184,8 @@ class Site:
 
     def _make(self, lang: str) -> dict:
         try:
-            value = (self.preview(lang) if _takes_an_argument(self.preview) else self.preview()) or {}
-        except Exception:  # noqa: BLE001
+            value = _clean_preview(self.preview(lang) if _takes_an_argument(self.preview) else self.preview())
+        except Exception:  # a site's preview never breaks the index
             value = {}
         if self.keep:
             self._kept[lang] = (time.monotonic(), value)
@@ -357,7 +360,7 @@ class Portal:
             file = (root / text["preview"]).resolve()
             if file.suffix.lower() != ".json" or not file.is_relative_to(root):
                 raise ValueError('preview はそのフォルダの中の .json ファイルです（例: "portal.json"）。')
-            preview = lambda lang: _preview_file(file, lang)  # noqa: E731
+            preview = lambda lang: _preview_file(file, lang)
         files = StaticFiles(root, self.allowed_hosts, home_link=_text(entry, "home_link") != "own")
         return Site(
             mount, text["name"], files, text["subtitle"], text["description"], files=files, preview=preview, **common
@@ -399,20 +402,15 @@ class Portal:
                 return _plain(start_response, "405 Method Not Allowed", b"Method Not Allowed")
             if path == "/owner":  # the owner's own names need no login (the server answers it under the public ones)
                 return _redirect(start_response, environ.get("SCRIPT_NAME", "") + "/", dict(environ, QUERY_STRING=""))
-            if path == "/portal.css":  # the index asks for it at its version (?v=)
-                current = environ.get("QUERY_STRING", "") == f"v={_version(PACKAGE / 'portal.css')}"
-                return _send(
-                    start_response,
-                    "text/css; charset=utf-8",
-                    _read(PACKAGE / "portal.css"),
-                    IMMUTABLE if current else "public, max-age=86400",
-                    environ=environ,
-                )
             if path in FILES:
                 name, kind = FILES[path]
                 current = environ.get("QUERY_STRING", "") == f"v={_version(PACKAGE / name)}"
                 return _send(
-                    start_response, kind, _read(PACKAGE / name), IMMUTABLE if current else "public, max-age=86400"
+                    start_response,
+                    kind,
+                    _read(PACKAGE / name),
+                    IMMUTABLE if current else "public, max-age=86400",
+                    environ=environ if kind.startswith("text/") else None,  # the pictures are compressed already
                 )
             if path == "/robots.txt":
                 return _send(
@@ -426,7 +424,7 @@ class Portal:
                 return legacy.app(environ, start_response)
             # Not permanent: a browser keeps a permanent redirect for good, so an address that is
             # unknown today (a typo, or a site added later) would keep going to News Site.
-            return _redirect(start_response, legacy.mount + path, environ)
+            return _redirect(start_response, environ.get("SCRIPT_NAME", "") + legacy.mount + path, environ)
         return _not_found(environ, start_response)
 
     def _visitor(self, environ) -> bool:
@@ -465,8 +463,8 @@ class Portal:
             "theme_script": THEME_SCRIPT,
             "title": e(title),
             "description": e(lead or title),
-            "url": e(f"{origin}{quote(home)}") if host else "",
-            "image": e(f"{origin}{quote(home)}og.png?v={_version(PACKAGE / 'og.png')}") if host else "",
+            "url": e(f"{origin}{_url_path(home)}") if host else "",
+            "image": e(f"{origin}{_url_path(home)}og.png?v={_version(PACKAGE / 'og.png')}") if host else "",
             "image_alt": e(f"{title}: " + " · ".join(site.say(lang, "name") for site in shown)),
             "css": e(f"{home}portal.css?v={_version(PACKAGE / 'portal.css')}"),
             "icon": e(f"{home}favicon.svg"),
@@ -641,8 +639,9 @@ class StaticFiles:
             return _plain(start_response, "400 Bad Request", b"Bad Request")
         if environ.get("REQUEST_METHOD", "GET") not in ("GET", "HEAD"):
             return _plain(start_response, "405 Method Not Allowed", b"Method Not Allowed")
-        parts = [part for part in environ.get("PATH_INFO", "").split("/") if part]
-        if not parts or environ.get("PATH_INFO", "").endswith("/"):
+        path = _wsgi_text(environ.get("PATH_INFO", ""))
+        parts = [part for part in path.split("/") if part]
+        if not parts or path.endswith("/"):
             parts.append("index.html")
         file = self._file(parts)
         if file is None:
@@ -672,12 +671,11 @@ class StaticFiles:
             ("Cache-Control", IMMUTABLE if current else "no-cache"),
             ("ETag", tag),
             ("Last-Modified", _http_date(stamp[0])),
-            ("Vary", "Accept-Encoding"),
+            # the way back is in the visitor's language
+            ("Vary", "Accept-Encoding, Cookie, Accept-Language" if back else "Accept-Encoding"),
             ("Content-Security-Policy", self.CSP),
             *SECURITY_HEADERS,
         ]
-        if back:
-            headers[4] = ("Vary", "Accept-Encoding, Cookie, Accept-Language")
         if tag in environ.get("HTTP_IF_NONE_MATCH", ""):
             start_response("304 Not Modified", headers)
             return [b""]
@@ -820,13 +818,30 @@ def _read(path: Path) -> bytes:
 def _address(environ) -> str:
     """The full address of this request, without its query (``https://name/infra/``)."""
     host = environ.get("HTTP_HOST", "") or environ.get("SERVER_NAME", "")
-    path = quote(environ.get("SCRIPT_NAME", "") + environ.get("PATH_INFO", ""))
+    path = _url_path(environ.get("SCRIPT_NAME", "") + environ.get("PATH_INFO", ""))
     return f"{environ.get('wsgi.url_scheme', 'http')}://{host}{path}"
 
 
-def _http_date(mtime_ns: int) -> str:
-    from email.utils import formatdate
+def _wsgi_text(value: str) -> str:
+    """A path from the WSGI environ as text: servers give its bytes as latin-1 (PEP 3333), the
+    address has them in UTF-8 (``/写真.png``). Anything else (not UTF-8, or text already) stays as it is."""
+    try:
+        return value.encode("latin-1").decode("utf-8")
+    except UnicodeError:
+        return value
 
+
+def _url_path(path: str, safe: str = "/") -> str:
+    """A WSGI path (PEP 3333: the request's bytes as latin-1) %-quoted for a Location header or a link.
+    Text that is not latin-1 (not from a WSGI server) is sent as UTF-8."""
+    try:
+        raw = path.encode("latin-1")
+    except UnicodeEncodeError:
+        raw = path.encode("utf-8")
+    return quote(raw, safe=safe)
+
+
+def _http_date(mtime_ns: int) -> str:
     return formatdate(mtime_ns / 1_000_000_000, usegmt=True)
 
 
@@ -837,13 +852,38 @@ def _preview_file(file: Path, lang: str = i18n.DEFAULT) -> dict:
     data = json.loads(_read(file).decode("utf-8"))
 
     def say(value):
-        if isinstance(value, dict):
-            value = value.get(lang, value.get(i18n.DEFAULT, ""))
-        return value if isinstance(value, str) else None
+        return value.get(lang, value.get(i18n.DEFAULT, "")) if isinstance(value, dict) else value
 
-    items = [(say(text), path) for text, path in data.get("items", [])]
-    items = [(text, path) for text, path in items if text and isinstance(path, str) and path.startswith("/")]
-    return {"title": say(data.get("title", "")) or "", "note": say(data.get("note", "")) or "", "items": items[:5]}
+    preview = _clean_preview(data, say)
+    return {**preview, "items": preview["items"][:5]} if preview else {}
+
+
+def _clean_preview(value, say=lambda text: text) -> dict:
+    """A site's preview as the index shows it: ``title`` and ``note`` texts (or ""), and ``items``,
+    pairs of a text and a path in the site (starting with /); ``say`` picks each text's language.
+    Anything else is left out, so a site that returns something odd still gets its card."""
+    if not isinstance(value, dict):
+        return {}
+
+    def text(raw) -> str:
+        raw = say(raw)
+        return raw if isinstance(raw, str) else ""
+
+    items = value.get("items")
+    pairs = (
+        [item for item in items if isinstance(item, (list, tuple)) and len(item) == 2]
+        if isinstance(items, (list, tuple))
+        else []
+    )
+    return {
+        "title": text(value.get("title")),
+        "note": text(value.get("note")),
+        "items": [
+            (text(words), path)
+            for words, path in pairs
+            if text(words) and isinstance(path, str) and path.startswith("/")
+        ],
+    }
 
 
 def _translations(entry: dict, keys: tuple) -> dict:
@@ -1000,7 +1040,7 @@ def owner_page(environ, start_response, state: str, problem: str = "", headers=(
     ``problem``: a SIGN_IN_PROBLEMS key, after a try."""
     lang = i18n.chosen(environ)
     e = html.escape
-    say = lambda ja: e(i18n.text(lang, ja))  # noqa: E731
+    say = lambda ja: e(i18n.text(lang, ja))
     status, message = SIGN_IN_PROBLEMS.get(problem, ("200 OK", ""))
     if state == "off":
         message = SIGN_IN_PROBLEMS["off"][1]
@@ -1065,7 +1105,8 @@ def _not_found(environ, start_response, site: str = ""):
         f'<!doctype html><html lang="{lang}"><head><meta charset="utf-8">'
         f'<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">'
         f'<title>{heading}</title><script>{THEME_SCRIPT}</script><link rel="icon" href="{e(home)}favicon.svg" type="image/svg+xml">'
-        f'<link rel="stylesheet" href="{e(home)}portal.css"></head><body class="missing"><main>'
+        f'<link rel="stylesheet" href="{e(home)}portal.css?v={_version(PACKAGE / "portal.css")}"></head>'
+        f'<body class="missing"><main>'
         f'<p class="date">{e(i18n.text(lang, "エラー {status}", status=404))}</p><h1>{heading}</h1>'
         f'<p class="lead">{e(i18n.text(lang, "アドレスが変わったか、なくなった可能性があります。"))}</p>'
         f'<p class="go">{links}</p></main></body></html>'
@@ -1089,7 +1130,7 @@ def _plain(start_response, status: str, body: bytes):
 
 def _redirect(start_response, target: str, environ, headers=()):
     query = environ.get("QUERY_STRING", "")
-    location = quote(target, safe="/%:@!$&'()*+,;=-._~") + (f"?{query}" if query else "")
+    location = _url_path(target, safe="/:@!$&'()*+,;=") + (f"?{query}" if query else "")
     start_response(
         "302 Found",
         [("Location", location), ("Content-Length", "0"), *headers],

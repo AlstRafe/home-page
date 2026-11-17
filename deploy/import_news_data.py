@@ -55,6 +55,8 @@ def store_secrets(path: Path) -> list[str]:
     import keyring
 
     secrets = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(secrets, dict):
+        return []
     stored = []
     for name, value in secrets.items():
         if name in SECRET_NAMES and isinstance(value, str) and value.strip():

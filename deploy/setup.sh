@@ -237,6 +237,7 @@ reload_server() {
 # the new code when it changes (homepage/server.py).
 write_version() {
   local app="$ROOT/News Site/work/app" version
+  [ -d "$app/.git" ] || return 0  # not cloned yet (its deploy key is not registered): nothing to name
   version="$(as_site git -C "$app" log -1 --format='git %h %cI')"
   if [ "$(cat "$app/VERSION" 2>/dev/null)" != "$version" ]; then
     as_site sh -c 'printf "%s\n" "$1" > "$2.tmp" && mv "$2.tmp" "$2"' - "$version" "$app/VERSION"

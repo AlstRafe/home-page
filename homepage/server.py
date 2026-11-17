@@ -73,6 +73,11 @@ def _names(value) -> tuple:
     return tuple(dict.fromkeys(host_without_port(item) for item in value if isinstance(item, str) and item.strip()))
 
 
+def valid_port(value) -> bool:
+    """A TCP port sites.toml may name (``true`` is no number, though Python counts it as 1)."""
+    return isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= 65535
+
+
 def read_settings(config: Path = CONFIG) -> Settings:
     """sites.toml's ``[server]`` and its Python sites (read at the start; a change restarts the server)."""
     try:
@@ -83,18 +88,13 @@ def read_settings(config: Path = CONFIG) -> Settings:
     server = data.get("server", {}) if isinstance(data.get("server"), dict) else {}
     port = server.get("port", 5000)
     listen = server.get("listen", "network")
-    hosts = server.get("hosts", [])
-    if not isinstance(port, int) or not 1 <= port <= 65535:
+    if not valid_port(port):
         print("[server] port は 1〜65535 の整数です。5000 で起動します。", flush=True)
         port = 5000
     if listen not in ("network", "local"):
         print('[server] listen は "network" か "local" です。"network" で起動します。', flush=True)
         listen = "network"
-    hosts = (
-        tuple(item.strip().lower().rstrip(".") for item in hosts if isinstance(item, str) and item.strip())
-        if isinstance(hosts, list)
-        else ()
-    )
+    hosts = _names(server.get("hosts", []))
     public = _names(server.get("public", []))
     moved_to = server.get("moved_to", "")
     moved_to = host_without_port(moved_to) if isinstance(moved_to, str) else ""
@@ -129,14 +129,13 @@ def settings_stamp(config: Path = CONFIG) -> str | None:
 
 def code_stamp(package: Path = PACKAGE) -> tuple:
     """The Home Page code as it is now: its files' names, times and sizes."""
+
+    def entry(file: Path) -> tuple:
+        info = file.stat()
+        return str(file.relative_to(package)), info.st_mtime_ns, info.st_size
+
     try:
-        return tuple(
-            sorted(
-                (str(file.relative_to(package)), file.stat().st_mtime_ns, file.stat().st_size)
-                for file in package.rglob("*.py")
-                if "__pycache__" not in file.parts
-            )
-        )
+        return tuple(sorted(entry(file) for file in package.rglob("*.py") if "__pycache__" not in file.parts))
     except OSError:
         return ()
 
@@ -344,7 +343,7 @@ def load_python_sites(entries: list, base: Path, host: dict) -> tuple[list[App],
             made = _factory(target)(mount=mount, host=host)
             if not isinstance(made, dict) or not callable(made.get("app")):
                 raise ValueError(f"{target} が app を返しませんでした")
-        except Exception as exc:  # noqa: BLE001 - one broken site never keeps the others down
+        except Exception as exc:  # one broken site never keeps the others down
             note = f"{mount} を読み込めませんでした（{exc}）。直したらサーバーを再起動してください。"
             print(note, flush=True)
             notes.append(note)
@@ -375,7 +374,7 @@ def _factory(target: str):
 def _version(app: App) -> str:
     try:
         return str(app.version() or "") if app.version else ""
-    except Exception:  # noqa: BLE001
+    except Exception:  # a broken version() is no new version
         return ""
 
 

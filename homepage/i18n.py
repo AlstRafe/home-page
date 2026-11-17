@@ -142,7 +142,7 @@ def chosen(environ) -> str:
     cookie = SimpleCookie()
     try:
         cookie.load(environ.get("HTTP_COOKIE", ""))
-    except Exception:  # noqa: BLE001 - a malformed cookie header is no choice
+    except Exception:  # a malformed cookie header is no choice
         cookie = SimpleCookie()
     value = cookie[COOKIE].value if COOKIE in cookie else ""
     return value if value in LANGS else from_browser(environ.get("HTTP_ACCEPT_LANGUAGE", ""))
@@ -189,7 +189,7 @@ def set_cookie(lang: str, secure: bool = False) -> tuple[str, str]:
     )
 
 
-def menu(lang: str, label_class: str = "lang") -> str:
+def menu(lang: str) -> str:
     """The language menu every site shows in its header: a <details> that needs no script
     (each choice is a link with ?lang=), the current language marked."""
     current = ' aria-current="true"'
@@ -200,7 +200,7 @@ def menu(lang: str, label_class: str = "lang") -> str:
     )
     label = html.escape(text(lang, "言語"))
     return (
-        f'<details class="{label_class}"><summary title="{label}" aria-label="{label}: {html.escape(NAMES[lang])}">'
+        f'<details class="lang"><summary title="{label}" aria-label="{label}: {html.escape(NAMES[lang])}">'
         f'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>'
         f"<span>{html.escape(NAMES[lang])}</span></summary><ul>{items}</ul></details>"
     )

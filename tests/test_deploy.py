@@ -4,6 +4,7 @@ Run: python -m unittest discover -s tests"""
 from __future__ import annotations
 
 import calendar
+import io
 import json
 import sqlite3
 import sys
@@ -135,19 +136,29 @@ class BackupTest(unittest.TestCase):
                 names = set(tar.getnames())
                 self.assertIn("instance/library.sqlite3", names)
                 self.assertNotIn("instance/collector.lock", names)
-                tar.extract("instance/library.sqlite3", folder, filter="data") if hasattr(
-                    tarfile, "data_filter"
-                ) else tar.extract("instance/library.sqlite3", folder)
+                safe = {"filter": "data"} if hasattr(tarfile, "data_filter") else {}  # Python 3.11.4 and later
+                tar.extract("instance/library.sqlite3", folder, **safe)
             db = sqlite3.connect(Path(folder) / "instance" / "library.sqlite3")
             self.assertEqual(db.execute("SELECT title FROM articles").fetchall(), [("kept",)])
             db.close()
+
+    def test_a_failed_copy_leaves_nothing_behind_and_keep_0_still_keeps_the_new_one(self):
+        with tempfile.TemporaryDirectory() as folder:
+            instance = make_pc(Path(folder) / "pc") / "instance"
+            target = Path(folder) / "backup"
+            with mock.patch.object(backup.sqlite3, "connect", side_effect=backup.sqlite3.OperationalError("locked")):
+                with self.assertRaises(backup.sqlite3.OperationalError):
+                    backup.main([str(instance), str(target)])
+            self.assertEqual([path.name for path in target.iterdir()], [])  # no .part, no temporary folder
+            self.assertEqual(backup.main([str(instance), str(target), "0"]), 0)
+            self.assertEqual(len(list(target.glob("news-instance-*.tar.gz"))), 1)
 
 
 class KeepaliveTest(unittest.TestCase):
     def test_the_busy_loop_steps_aside_whenever_anything_else_wants_a_cpu(self):
         loads = iter(["0.10 0.20 0.30 3/180 4242\n"] * 3 + ["0.10 0.20 0.30 1/180 4242\n"] * 1000)
         with (
-            mock.patch("builtins.open", side_effect=lambda *a, **k: __import__("io").StringIO(next(loads))),
+            mock.patch("builtins.open", side_effect=lambda *a, **k: io.StringIO(next(loads))),
             mock.patch.object(keepalive, "YIELD", 0.01),
             mock.patch.object(keepalive.time, "sleep") as slept,
         ):
@@ -155,7 +166,7 @@ class KeepaliveTest(unittest.TestCase):
         self.assertEqual(slept.call_count, 3)  # once for each look that found the sites busy
         with mock.patch("builtins.open", side_effect=OSError):
             self.assertFalse(keepalive.others_running())  # no /proc (not Linux): just work
-        with mock.patch("builtins.open", side_effect=lambda *a, **k: __import__("io").StringIO("0 0 0 2/180 1\n")):
+        with mock.patch("builtins.open", side_effect=lambda *a, **k: io.StringIO("0 0 0 2/180 1\n")):
             self.assertFalse(keepalive.others_running(own=2))  # its two workers alone
             self.assertTrue(keepalive.others_running(own=1))
 
