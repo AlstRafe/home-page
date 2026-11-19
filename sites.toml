@@ -53,9 +53,13 @@ moved_to = "haruxera.duckdns.org" # 公開の名前のうちこれ以外（Funne
 # preview = "portal.json"          # カードに並べる中身（そのフォルダの JSON。書き換えると一覧に即反映）:
 #                                  # {"title": "見出し", "items": [["文", "/サイト内のパス"], ...]}（最大 5 件）
 #                                  # 文は {"ja": "…", "ko": "…", "en-GB": "…", "zh-TW": "…"} でもよい
+# search = "/search?q={q}"         # カードの検索欄: 入れた言葉を {q} に入れて、サイト内のこのアドレスへ（#… も可）
+# search_hint = "記事を検索"        # 検索欄の薄い文字（省略すると「<name> の中を検索」）
+# links = [["使い方", "/help"]]     # カードの「よく使うページ」: [["文", "/サイト内のパス"], ...]
 #
-# [site.en-GB]                     # ほかの言語での name・subtitle・description・tags・open（ko / en-GB / zh-TW）
+# [site.en-GB]                     # ほかの言語での name・subtitle・description・tags・open・search_hint・links（ko / en-GB / zh-TW）
 # description = "One or two sentences for a first-time visitor"
+# links = ["How to use"]           # links は文だけを同じ順に
 #
 # Python の Web アプリ（WSGI）は folder の代わりに python と entry を書く（サーバーの起動時に読み込む）:
 # python = "../MyApp"              # sys.path に足すフォルダ（requirements.txt があれば launcher が入れる）
@@ -72,21 +76,30 @@ description = "BBC・中央社・聯合ニュースと、技術系の InfoQ・iT
 icon = "news"
 accent = "red"
 tags = ["毎時更新", "英・中・韓 → 日本語", "各社の読み比べ"]
+search = "/?q={q}"
+search_hint = "記事を検索（日本語も可）"
+links = [["今日のまとめ", "/digest"], ["読み比べ一覧", "/stories"]]
 
 [site.ko]
 subtitle = "번역해서 비교해 읽는 뉴스"
 description = "BBC·중앙통신사(CNA)·연합뉴스와 기술 매체 InfoQ·iThome 등을 매시간 모읍니다. 원문과 번역을 나란히 놓고, 같은 뉴스를 매체별로 비교해 읽을 수 있습니다."
 tags = ["매시간 업데이트", "영·중 → 한국어", "매체별 비교"]
+search_hint = "기사 검색 (한국어도 가능)"
+links = ["오늘의 요약", "비교 읽기 목록"]
 
 [site.en-GB]
 subtitle = "The news, translated and compared"
 description = "Collects the BBC, CNA, Yonhap and tech outlets such as InfoQ and iThome every hour. Read each original beside its translation, and compare how the outlets covered the same story."
 tags = ["Updated hourly", "ZH · KO → English", "Compare the outlets"]
+search_hint = "Search articles (any language)"
+links = ["Today's digest", "All comparisons"]
 
 [site.zh-TW]
 subtitle = "翻譯後比較閱讀的新聞"
 description = "每小時收集 BBC、中央社、韓聯社，以及 InfoQ、iThome 等科技媒體。原文與譯文並列，可比較各家媒體如何報導同一則新聞。"
 tags = ["每小時更新", "英・韓 → 中文", "各家媒體比較"]
+search_hint = "搜尋文章（可用中文）"
+links = ["今日摘要", "比較閱讀列表"]
 
 [[site]]
 mount = "/infra"
@@ -99,43 +112,61 @@ accent = "teal"
 tags = ["インストール不要", "Linux 基礎から 19 ミッション", "架空データで安全"]
 home_link = "own"
 preview = "portal.json" # 「すぐ遊べるミッション」（Infra Game 側で管理）
+search = "/#/ref?q={q}" # コマンド辞典
+search_hint = "コマンドを検索（例: kubectl）"
+links = [["ラーニング", "/#/learn"], ["コマンド辞典", "/#/ref"], ["フリーラボ", "/#/play/sandbox"]]
 
 [site.ko]
 subtitle = "인프라 운영 트레이닝 게임"
-description = "Kubernetes·Docker·Harbor·OpenShift·AWS에서 흔히 일어나는 장애를 브라우저 속 터미널로 해결하며 배웁니다. 분야별 학습 문제 333문항(자격증 60종 대비)과 명령어 사전도 있습니다. 모든 조작은 가상 데이터로 하는 시뮬레이션입니다."
+description = "Kubernetes, Docker, Harbor, OpenShift, AWS에서 흔히 일어나는 장애를 브라우저 속 터미널로 해결하며 배웁니다. 분야별 학습 문제 333문항(자격증 60종 대비)과 명령어 사전도 있습니다. 모든 조작은 가상 데이터로 하는 시뮬레이션입니다."
 tags = ["설치 불필요", "Linux 기초부터 19개 미션", "가상 데이터라 안전"]
+search_hint = "명령어 검색 (예: kubectl)"
+links = ["학습", "명령어 사전", "프리 랩"]
 
 [site.en-GB]
 subtitle = "Infrastructure operations training game"
 description = "Learn by fixing common Kubernetes, Docker, Harbor, OpenShift and AWS failures in a terminal inside your browser. Also 333 practice questions by subject (covering 60 certifications) and a command reference. Everything is a simulation with fictional data."
 tags = ["Nothing to install", "19 missions from Linux basics up", "Safe: all data is fictional"]
+search_hint = "Search commands (e.g. kubectl)"
+links = ["Learning", "Command reference", "Free lab"]
 
 [site.zh-TW]
 subtitle = "基礎架構維運訓練遊戲"
 description = "在瀏覽器裡的終端機排除 Kubernetes、Docker、Harbor、OpenShift、AWS 的常見故障，邊做邊學。另有 333 題分領域練習題（涵蓋 60 項認證考試）與指令辭典。所有操作都是使用虛構資料的模擬。"
 tags = ["免安裝", "從 Linux 基礎開始的 19 個任務", "虛構資料，安全無虞"]
+search_hint = "搜尋指令（例：kubectl）"
+links = ["學習", "指令辭典", "自由實驗室"]
 
 [[site]]
 mount = "/val"
 python = "../VALORANT-Project"
 entry = "valtracker.hosting:site" # 名前と副題は VAL Tracker 側が返す
-description = "Riot ID でランクと最近の試合を調べ、お気に入りに登録できる VALORANT のトラッカー。エージェントの能力も見られます。"
+description = "Riot ID を入れるだけで、ランクと最近の試合、エージェント別・マップ別の成績から通算の記録まで見られる VALORANT のトラッカー。ランキング、ストアのおすすめ、パッチノート、大会の日程と結果、サーバーの状況も。"
 icon = "game"
 accent = "red"
-tags = ["登録不要", "スマホ対応", "4 言語"]
+tags = ["登録不要", "通算の戦績も", "パッチ・大会の情報"]
 home_link = "own"
+search = "/search?q={q}"
+search_hint = "Riot ID（名前#タグ）"
+links = [["ランキング", "/leaderboard"], ["エージェント", "/agents"], ["パッチノート", "/news"], ["eスポーツ", "/esports"], ["ツール", "/tools"]]
 
 [site.ko]
 subtitle = "VALORANT 전적 트래커"
-description = "Riot ID로 랭크와 최근 경기를 조회하고 즐겨찾기에 등록할 수 있는 VALORANT 트래커입니다. 요원의 스킬도 볼 수 있습니다."
-tags = ["회원가입 불필요", "스마트폰 지원", "4개 언어"]
+description = "Riot ID만 입력하면 랭크와 최근 경기, 요원별·맵별 성적부터 통산 기록까지 볼 수 있는 VALORANT 트래커입니다. 리더보드, 상점 추천, 패치 노트, 대회 일정과 결과, 서버 상태도 볼 수 있습니다."
+tags = ["회원가입 불필요", "통산 전적까지", "패치·대회 정보"]
+search_hint = "Riot ID (이름#태그)"
+links = ["리더보드", "요원", "패치 노트", "e스포츠", "도구"]
 
 [site.en-GB]
 subtitle = "VALORANT stats tracker"
-description = "A VALORANT tracker: look up a player's rank and recent matches by Riot ID, and save them to your favourites. You can also see what each agent's abilities do."
-tags = ["No sign-up", "Works on phones", "4 languages"]
+description = "Enter a Riot ID to see a player's rank and recent matches, their results by agent and by map, and lifetime records. Also the leaderboard, featured store bundles, patch notes, esports schedules and results, and server status."
+tags = ["No sign-up", "Lifetime stats too", "Patches and esports"]
+search_hint = "Riot ID (Name#tag)"
+links = ["Leaderboard", "Agents", "Patch notes", "Esports", "Tools"]
 
 [site.zh-TW]
 subtitle = "VALORANT 戰績查詢"
-description = "用 Riot ID 查詢牌位與近期對戰，並可加入我的最愛的 VALORANT 戰績查詢網站。也能查看各特務的技能。"
-tags = ["免註冊", "支援手機", "4 種語言"]
+description = "只要輸入 Riot ID，就能查看牌位與近期對戰、各特務與各地圖的戰績，甚至生涯紀錄的 VALORANT 戰績查詢網站。另有排行榜、商店推薦、更新說明、賽事賽程與結果，以及伺服器狀態。"
+tags = ["免註冊", "也有生涯戰績", "更新與賽事資訊"]
+search_hint = "Riot ID（名稱#標籤）"
+links = ["排行榜", "特務", "更新說明", "電競", "工具"]

@@ -111,7 +111,7 @@ master は 1 分以内に VM から公開される。CI の赤が、公開前（
 - Python のテストは `ubuntu-24.04`（VM と同じ）と `windows-latest`（持ち主の PC）の両方、`fail-fast: false`、`PYTHONUTF8: "1"`（Windows の runner は cp1252 で日本語を出せない）
 - 書式のジョブは Ruff・Taplo（`uvx`、キャッシュなし）→ `npm ci` → `npm run lint`。JS だけのリポジトリは 1 ジョブで `npm ci`・`npm test`・`npm run lint`
 - 警告も 0 件にしてから merge する。緑にするためにテストを飛ばしたり消したりしない
-- home-page の [`live.yml`](../.github/workflows/live.yml) は公開中のサイトを外から確かめる（6 時間ごと、master への push の 150 秒後、手動）。ページ・プレビュー画像・manifest・`/news/api/version`・robots.txt・セキュリティヘッダを見る（[`deploy/livecheck.py`](../deploy/livecheck.py)）。新しいサイトを足したらここにも足す
+- home-page の [`live.yml`](../.github/workflows/live.yml) は公開中のサイトを外から確かめる（6 時間ごと、master への push のあと、手動）。push のあとは `/version.json` にその push のコミットが出るまで待ってから（`--expect`）、ページ・プレビュー画像・manifest・`/news/api/version`・カードの検索・robots.txt・セキュリティヘッダを見る（[`deploy/livecheck.py`](../deploy/livecheck.py)）。新しいサイトを足したらここにも足す。ほかのリポジトリで公開後を確かめるときも、決まった秒数待つ代わりに `/version.json` の `"/val"` などが自分のコミットになるのを待つ
 
 ## Git と PR
 
@@ -133,7 +133,7 @@ master は 1 分以内に VM から公開される。CI の赤が、公開前（
 - 選んだ言語は `lang` クッキー（`Path=/`、ホスト全体で共通）。どのアドレスでも `?lang=<コード>` で切り替わる（ポータルが受けて、クッキーを付けて同じアドレスへ戻す）
 - まだ選んでいなければ Accept-Language（`zh-*` → `zh-TW`、`en-*` → `en-GB`、対応外だけなら `en-GB`、なければ `ja`）
 - ヘッダー右上に言語メニュー: `<details class="lang">`、地球のアイコンと今の言語名、4 つの `?lang=` リンク（日本語 / 한국어 / English (UK) / 中文（台灣））。外をクリックか Esc で閉じ、フォーカスはボタンへ戻す
-- 文言は日本語をキーに引き、訳がなければ日本語を出す。画面の文言・中身（問題やコマンドの説明）も訳す。持ち主専用の画面（設定・状態）は日本語だけでよい
+- 文言は日本語をキーに引き、訳がなければ日本語を出す。画面の文言・中身（問題やコマンドの説明）も訳す。持ち主専用の画面（設定・状態）も訳す（持ち主も別の言語で見るため。開発者向けのエラー文は日本語のままでよい）
 - 訳の抜けはテストで見つける（CoreLab `node tests/run-i18n.js`、NewsBridge `python tests/test_i18n.py --missing`）
 - 基準の実装は [`homepage/i18n.py`](../homepage/i18n.py)
 
@@ -155,12 +155,13 @@ master は 1 分以内に VM から公開される。CI の赤が、公開前（
 
 - `sites.toml` の `[[site]]` に登録する（静的なら `folder`、Python なら `python` と `entry`）。名前・説明・タグは `[site.ko]` などで 4 言語
 - カードに並べる中身は `preview`（静的サイトは `portal.json`、文は `{"ja": …, "ko": …, "en-GB": …, "zh-TW": …}`）
+- サイト内の検索があれば `search`（`{q}` 入りのアドレス）と `search_hint` でカードに検索欄を、よく使うページは `links` で並べる（どちらも 4 言語）
 - 「← サイト一覧」へ戻る道を必ず持つ（自前で持つなら `home_link = "own"`、なければポータルが左下に付ける）
 - 見つからないページは訪問者の言語で、サイトのトップとサイト一覧へのリンク付き
 
 ### リンクのプレビューとアイコン
 
-- `og.png`（1200×630）、`apple-touch-icon.png`（180×180）、`favicon.svg`
+- `og.png`（1200×630）、`apple-touch-icon.png`（180×180）、`favicon.svg`。ホーム画面に追加できるように manifest（192・512・maskable のアイコン）
 - `og:image`・`og:url` は相対で書いてよい（ポータルが訪問者のアドレスで補う）
 - サイト一覧の og.png はサイトのカードを写しているので、サイトを足したら作り直す
 
