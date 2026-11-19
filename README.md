@@ -12,7 +12,7 @@ sites.toml            サーバー設定（[server]）と、一覧に並べる�
 launcher.py           起動役: 仮想環境の準備、ログオン時の自動起動、サーバーの見張りと再起動
 start.bat             launcher.py をダブルクリックで動かす
 homepage/server.py    サーバー本体（waitress）: 待ち受け、ホスト名の確認、テスト公開の https/noindex、自動再起動
-homepage/__init__.py  ポータル（WSGI）: 振り分け、sites.toml、一覧ページ、カードの検索（/search）、/version.json、/portal.webmanifest
+homepage/__init__.py  ポータル（WSGI）: 振り分け、sites.toml、一覧ページ、区画の検索（/search）、/version.json、/portal.webmanifest
 homepage/static.py    フォルダのサイトの配信（ETag・gzip・?v= の版・戻るリンク・og:image の補完）
 homepage/pages.py     ポータル自身の小さなページ（404・持ち主のログイン）と、ダーク/ライト（THEME_SCRIPT。localStorage "theme" は全サイト共通）
 homepage/web.py       答え方の共通部品（セキュリティヘッダ、転送、アドレス、パッケージのファイル）
@@ -77,11 +77,11 @@ name = "Memo"
 
 - 静的ファイルは `.html .css .js .json .svg .png .jpg .gif .webp .ico .woff2 .mp3 .mp4 .webm .wasm` だけ配信。ドットファイル・ドットフォルダ・フォルダの外は 404、GET/HEAD のみ
 - 静的ファイルには ETag を付け、変わっていなければ 304（中身なし）で返す。1KB 以上のテキスト（html・css・js・json・svg・wasm）は gzip で送る（CoreLab のスクリプト約 1.2MB が 2 回目以降はほぼ 0、初回も約 1/5）
-- `preview = "portal.json"` で、サイトのフォルダにある JSON の中身をカードに並べる（`{"title": "見出し", "items": [["文", "/サイト内のパス"], ...]}`、最大 5 件、サイト内のパスだけ）。JSON を書き換えると一覧に即反映。CoreLab は「すぐ遊べるミッション」を Infra Game 側の portal.json で持つ
+- `preview = "portal.json"` で、サイトのフォルダにある JSON の中身を区画の画面の見本に並べる（`{"title": "見出し", "items": [["文", "/サイト内のパス"], ...]}`、最大 5 件、サイト内のパスだけ）。JSON を書き換えると一覧に即反映。CoreLab は「すぐ遊べるミッション」を Infra Game 側の portal.json で持つ
 - 「← サイト一覧」へ戻るリンクは、サイトが自前で持っていなければポータルが各 HTML の左下に自動で付ける（自前で持つなら `home_link = "own"`）
 - HTML の `og:image`・`og:url` は相対で書いてよい（`content="og.png"`）。リンクのプレビューには完全なアドレスが要るので、ポータルが訪問者の使ったアドレスで補う（CoreLab の og.png）
-- `search = "/search?q={q}"` でカードに検索欄が付く。入れた言葉を `{q}` に入れて、サイト内のそのアドレスへ送る（ポータルの `/search?site=/val&q=…` が転送するので、CoreLab の `/#/ref?q={q}` のような `#` の中も可）。薄い文字は `search_hint`
-- `links = [["ランキング", "/leaderboard"], ...]` でカードに「よく使うページ」が並ぶ。ほかの言語は `[site.ko]` などに `links = ["리더보드", ...]`（文だけを同じ順に）
+- `search = "/search?q={q}"` で区画の画面の見本に検索欄が付く（ページ最初の検索欄からも選べる）。入れた言葉を `{q}` に入れて、サイト内のそのアドレスへ送る（ポータルの `/search?site=/val&q=…` が転送するので、CoreLab の `/#/ref?q={q}` のような `#` の中も可）。薄い文字は `search_hint`
+- `links = [["ランキング", "/leaderboard"], ...]` で区画に「よく使うページ」が並ぶ（中身があれば入口ボタンの横に「›」で、なければ画面の見本の中にタイルで）。ほかの言語は `[site.ko]` などに `links = ["리더보드", ...]`（文だけを同じ順に）
 - `public = false` でテスト公開（Funnel）の名前からは隠す。このPC・LAN からは見えるので、公開前の確認に使える
 - 書き間違いや読み込めなかったサイトは、このPCから一覧を開いたときだけページ下の「このPCの持ち主向け」欄に理由が出る
 - Python の Web アプリは `python = "フォルダ"` と `entry = "モジュール:関数"` で足す。関数は `site(mount=..., host={...})` で `{"app": WSGIアプリ, "name", "subtitle", "preview", "disallow", "legacy", "version"}` を返す（homepage/server.py の説明、News Site の newsreader/hosting.py が実例）
@@ -129,4 +129,5 @@ News Site へ渡したパッチの控えは `patches/` にある（どれも取�
 
 ## 今後の候補
 
-- サイトを足したら og.png（一覧のプレビュー画像。いまは NewsBridge・CoreLab・VAL Tracker の 3 行）も作り直す
+- サイトを足したら og.png（一覧のプレビュー画像。いまは大きな見出しの下に NewsBridge・CoreLab・VAL Tracker の 3 列）も作り直す
+- 区画の大きな見出しは `headline`、数字の事実は `facts`、黒い面は `dark = true`（どれも 4 言語。決まりは docs/CONVENTIONS.md の「デザインの共通トークン」）

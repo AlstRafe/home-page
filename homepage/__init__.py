@@ -63,8 +63,8 @@ WORD = re.compile(r"[a-z0-9-]+")
 SEARCH = re.compile(r"/[!#$%&'()*+,\-./0-9:;=?@A-Z\[\]_a-z{}~]*")
 ACCENTS = ("red", "orange", "blue", "teal", "green", "amber", "purple", "gray")
 #: What a language table may say (sites.toml ``[ko]`` and so on, and ``[site.ko]`` under a site).
-PAGE_TEXTS = ("title", "lead", "points", "about")
-SITE_TEXTS = ("name", "subtitle", "description", "tags", "open", "search_hint", "links")
+PAGE_TEXTS = ("title", "headline", "lead", "points", "about")
+SITE_TEXTS = ("name", "subtitle", "headline", "description", "facts", "tags", "open", "search_hint", "links")
 #: Files of this package served as they are: address -> (file, type).
 FILES = {
     # The index asks for it at its version (?v=); sent gzipped to browsers that take it.
@@ -101,7 +101,7 @@ PREVIEW_SECONDS = 60.0
 #: The words a card's search box sends at most.
 SEARCH_CHARACTERS = 200
 #: The page colour (portal.css --paper), for the phone's bar and the app's splash screen.
-PAPER = "#edf0f2"
+PAPER = "#fbfbfa"
 
 
 @dataclass
@@ -140,6 +140,11 @@ class Site:
     description: str = ""
     icon: str = ""
     accent: str = "gray"
+    #: The big line of its section (what the site does, in a few words) and its facts: (big words, caption).
+    headline: str = ""
+    facts: tuple = ()
+    #: Its section is the page's dark plate (light type on near-black, in both themes).
+    dark: bool = False
     tags: tuple = ()
     open_label: str = ""
     listed: bool = True
@@ -166,7 +171,9 @@ class Site:
         default = {
             "name": self.name,
             "subtitle": self.subtitle,
+            "headline": self.headline,
             "description": self.description,
+            "facts": self.facts,
             "tags": self.tags,
             "open": self.open_label,
             "search_hint": self.search_hint,
@@ -340,7 +347,17 @@ class Portal:
             raise ValueError("書き方が違います。")
         text = {
             key: _text(entry, key)
-            for key in ("name", "subtitle", "description", "icon", "open", "preview", "search", "search_hint")
+            for key in (
+                "name",
+                "subtitle",
+                "headline",
+                "description",
+                "icon",
+                "open",
+                "preview",
+                "search",
+                "search_hint",
+            )
         }
         accent = _text(entry, "accent") or "gray"
         if accent not in ACCENTS:
@@ -353,13 +370,20 @@ class Portal:
         if text["search"] and (not SEARCH.fullmatch(text["search"]) or text["search"].count("{q}") != 1):
             raise ValueError('search はサイトの中のアドレスで、言葉の入る {q} を 1 つ含みます（例: "/search?q={q}"）。')
         links = _links(entry.get("links", []))
+        facts = _facts(entry.get("facts", []))
         texts = _translations(entry, SITE_TEXTS)
         for lang, said in texts.items():
             if "links" in said and len(said["links"]) != len(links):
                 raise ValueError(f"[{lang}] の links は、links と同じ数の名前を同じ順に並べます（{len(links)} 個）。")
+        dark = entry.get("dark", False)
+        if not isinstance(dark, bool):
+            raise ValueError("dark は true か false です。")
         common = {
             "icon": text["icon"],
             "accent": accent,
+            "headline": text["headline"],
+            "facts": facts,
+            "dark": dark,
             "tags": tuple(tags),
             "open_label": text["open"],
             "listed": _flag(entry, "listed"),
@@ -577,16 +601,24 @@ class Portal:
         lang = i18n.chosen(environ)
         settings = {**self.settings, **self.page_texts.get(lang, {})}
         title = _setting(settings, "title", i18n.text(lang, "サイト一覧"))
+        headline = _setting(settings, "headline", "") or title
         lead = _setting(settings, "lead", "")
         points = settings.get("points", [])
         points = [p for p in points if isinstance(p, str)] if isinstance(points, list) else []
         about = _setting(settings, "about", "")
-        today = datetime.now(JST)
         scheme = environ.get("wsgi.url_scheme", "http")
         host = environ.get("HTTP_HOST", "") or environ.get("SERVER_NAME", "")
         home = environ.get("SCRIPT_NAME", "") + "/"
         origin = f"{scheme}://{host}" if host else ""
         e = html.escape
+        say = _sayer(lang)
+        jump = ""
+        if len(shown) > 1:
+            jump = (
+                f'<nav class="jump" aria-label="{say("サイトへ移動")}"><ul>'
+                + "".join(f'<li><a href="#{_anchor(site)}">{e(site.say(lang, "name"))}</a></li>' for site in shown)
+                + "</ul></nav>"
+            )
         values = {
             "lang": lang,
             "locale": i18n.LOCALES[lang],
@@ -594,6 +626,7 @@ class Portal:
             "theme": theme_button(lang),
             "theme_script": THEME_SCRIPT,
             "title": e(title),
+            "headline": _words(headline),
             "description": e(lead or title),
             "url": e(f"{origin}{web.url_path(home)}") if host else "",
             "image": e(f"{origin}{web.url_path(home)}og.png?v={web.version(PACKAGE / 'og.png')}") if host else "",
@@ -602,10 +635,11 @@ class Portal:
             "icon": e(f"{home}favicon.svg"),
             "touch_icon": e(web.asset("apple-touch-icon.png", home)),
             "manifest": e(f"{home}portal.webmanifest"),
-            "date": e(i18n.date(lang, today)),
+            "jump": jump,
             "lead": f'<p class="lead">{e(lead)}</p>' if lead else "",
             "points": ('<ul class="points">' + "".join(f"<li>{e(p)}</li>" for p in points) + "</ul>") if points else "",
-            "sites": "\n".join(self._card(site, n, visitor, lang, home) for n, site in enumerate(shown, 1)),
+            "find": self._find_all(shown, lang, home),
+            "sites": "\n".join(self._section(site, n, visitor, lang, home) for n, site in enumerate(shown, 1)),
             "count": e(i18n.text(lang, "サイト {count} 件", count=len(shown))),
             "about": f"<p>{e(about)}</p>" if about else "",
             "owner": "" if visitor else self._owner_note(lang, environ.get(OWNER_KEY) is True),
@@ -613,33 +647,44 @@ class Portal:
         page = web.read(PACKAGE / "page.html").decode("utf-8")
         return re.sub(r"\{\{ (\w+) \}\}", lambda m: values.get(m.group(1), ""), page)
 
-    def _card(self, site: Site, number: int, visitor: bool, lang: str = i18n.DEFAULT, home: str = "/") -> str:
+    @staticmethod
+    def _find_all(shown: list[Site], lang: str, home: str) -> str:
+        """The opening screen's search: pick a site (the first one with a search box is chosen), type, and
+        go on to that site's own search, as its section's box does."""
+        e = html.escape
+        say = _sayer(lang)
+        searchable = [site for site in shown if site.search]
+        if not searchable:
+            return ""
+        if len(searchable) == 1:
+            where = f'<input type="hidden" name="site" value="{e(searchable[0].mount)}">'
+            hint = _hint(searchable[0], lang)
+        else:
+            where = (
+                f'<select name="site" aria-label="{say("検索するサイト")}">'
+                + "".join(
+                    f'<option value="{e(site.mount)}">{e(site.say(lang, "name"))}</option>' for site in searchable
+                )
+                + "</select>"
+            )
+            hint = i18n.text(lang, "サイトを選んで検索")
+        return _search_form(home, where, hint, i18n.text(lang, "検索する言葉"), lang)
+
+    def _section(self, site: Site, number: int, visitor: bool, lang: str = i18n.DEFAULT, home: str = "/") -> str:
+        """One site's screen: its name, the headline, what it is, how to go in, a framed preview
+        (its own search, what it has now or its most used pages) and its facts."""
         e = html.escape
         say = _sayer(lang)
         href = e(site.mount + "/")
+        anchor = _anchor(site)
         name, subtitle, description = site.say(lang, "name"), site.say(lang, "subtitle"), site.say(lang, "description")
-        sub = f'<p class="sub">{e(subtitle)}</p>' if subtitle else ""
-        description = f'<p class="desc">{e(description)}</p>' if description else ""
-        chips = list(site.say(lang, "tags")) + (
-            [] if site.public or visitor else [i18n.text(lang, "非公開（持ち主だけ）")]
+        headline = site.say(lang, "headline") or subtitle
+        private = "" if site.public or visitor else f'<span class="private">{say("非公開（持ち主だけ）")}</span>'
+        intro = (
+            f'<h2 class="name" id="{anchor}-name">{self._icon(site)}<span>{e(name)}</span>{private}</h2>\n'
+            + (f'<p class="headline">{e(headline)}</p>\n' if headline else "")
+            + (f'<p class="desc">{e(description)}</p>\n' if description else "")
         )
-        tags = ""
-        if chips:
-            tags = (
-                f'<ul class="tags" aria-label="{say("特徴")}">' + "".join(f"<li>{e(t)}</li>" for t in chips) + "</ul>"
-            )
-        find = ""
-        if site.search:
-            hint = site.say(lang, "search_hint") or i18n.text(lang, "{name} の中を検索", name=name)
-            find = (
-                f'<form class="find" action="{e(home)}search" method="get" role="search">'
-                f'<input type="hidden" name="site" value="{e(site.mount)}">'
-                f'<input type="search" name="q" placeholder="{e(hint)}" aria-label="{e(name)}: {e(hint)}" '
-                f'maxlength="{SEARCH_CHARACTERS}" required autocapitalize="off" spellcheck="false" enterkeyhint="search">'
-                f'<button type="submit" title="{say("検索")}"><svg viewBox="0 0 24 24" aria-hidden="true">'
-                '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>'
-                f'<span class="words">{say("検索")}</span></button></form>'
-            )
         now = site.now(lang)
         items = "".join(
             f'<li><a href="{e(site.mount + path)}">{e(text)}</a></li>' for text, path in now.get("items", [])
@@ -648,29 +693,63 @@ class Portal:
         updated = site.updated()
         if not note and updated:
             note = i18n.updated(lang, updated)
-        heading = now.get("title") or i18n.text(lang, "新着")
-        preview = ""
-        if items:
-            preview = (
-                f'<div class="now"><p class="now-head">{e(heading)}'
-                f"{f'<span>{e(note)}</span>' if note else ''}</p><ul>{items}</ul></div>"
-            )
         shortcuts = site.shortcuts(lang)
-        links = ""
-        if shortcuts:
-            links = (
+        label = site.say(lang, "open") or i18n.text(lang, "{name} を開く", name=name)
+        more = "".join(
+            f'<a class="more" href="{e(site.mount + path)}">{e(text)}<span aria-hidden="true">›</span></a>'
+            for text, path in (shortcuts if items else [])
+        )
+        go = f'<p class="go"><a class="open" href="{href}">{e(label)}</a>{more}</p>\n'
+        body = ""
+        if items:
+            heading = now.get("title") or i18n.text(lang, "新着")
+            body = (
+                f'<div class="now"><p class="now-head">{e(heading)}'
+                f"{f'<span>{e(note)}</span>' if note else ''}</p><ol>{items}</ol></div>"
+            )
+        elif shortcuts:
+            body = (
                 f'<nav class="links" aria-label="{e(name)}: {say("よく使うページ")}"><ul>'
-                + "".join(f'<li><a href="{e(site.mount + path)}">{e(text)}</a></li>' for text, path in shortcuts)
+                + "".join(
+                    f'<li><a href="{e(site.mount + path)}"><b>{e(text)}</b><code>{e(site.mount + path)}</code></a></li>'
+                    for text, path in shortcuts
+                )
                 + "</ul></nav>"
             )
+        find = ""
+        if site.search:
+            hint = _hint(site, lang)
+            find = _search_form(
+                home, f'<input type="hidden" name="site" value="{e(site.mount)}">', hint, f"{name}: {hint}", lang
+            )
+        sub = f'<span class="sub">{e(subtitle)}</span>' if subtitle and subtitle != headline else ""
         state = f'<span class="status">{e(note)}</span>' if note and not items else ""
-        label = site.say(lang, "open") or i18n.text(lang, "{name} を開く", name=name)
+        screen = ""
+        if body or find:
+            screen = (
+                f'<div class="screen"><div class="bar"><p class="who"><b>{e(name)}</b>{sub}{state}</p>{find}</div>'
+                f"{body}</div>\n"
+            )
+        elif state:  # nothing to frame: how fresh it is goes beside the open button
+            go = go.replace("</p>\n", f"{state}</p>\n")
+        facts = site.say(lang, "facts")
+        if facts:
+            rows = "".join(f"<li><b>{e(big)}</b><span>{e(caption)}</span></li>" for big, caption in facts)
+            extra = f'<ul class="facts" aria-label="{e(name)}: {say("特徴")}">{rows}</ul>\n'
+        else:
+            tags = site.say(lang, "tags")
+            extra = (
+                f'<ul class="tags" aria-label="{e(name)}: {say("特徴")}">'
+                + "".join(f"<li>{e(t)}</li>" for t in tags)
+                + "</ul>\n"
+                if tags
+                else ""
+            )
+        # Odd sections on the light grey band, even ones beside their preview (on a computer); one may be the dark plate
+        look = (" plate" if site.dark else " band" if number % 2 else "") + ("" if number % 2 else " side")
         return (
-            f'<li class="site accent-{site.accent}">\n<div class="site-head">{self._icon(site)}'
-            f'<div class="site-name"><h2><a href="{href}">{e(name)}</a></h2>{sub}</div>'
-            f'<span class="no" aria-hidden="true">{number:02d}</span></div>\n'
-            f"{description}{tags}{find}{preview}{links}\n"
-            f'<p class="go"><a class="open" href="{href}">{e(label)}<span class="arrow" aria-hidden="true">→</span></a>{state}</p>\n</li>'
+            f'<section class="site accent-{site.accent}{look}" id="{anchor}" aria-labelledby="{anchor}-name">\n'
+            f"{intro}{go}{screen}{extra}</section>"
         )
 
     def _left_notes(self) -> list[str]:
@@ -810,6 +889,20 @@ def _links(value) -> tuple:
     return tuple((text.strip(), path.strip()) for text, path in value)
 
 
+def _facts(value, where: str = "") -> tuple:
+    """sites.toml ``facts``: [["大きな文字", "その説明"], ...] (at most 4) as (big, caption) pairs."""
+    if (
+        not isinstance(value, list)
+        or len(value) > 4
+        or not all(
+            isinstance(item, list) and len(item) == 2 and all(isinstance(part, str) and part.strip() for part in item)
+            for item in value
+        )
+    ):
+        raise ValueError(f'{where}facts は [["大きな文字", "その説明"], …] の並びです（4 つまで）。')
+    return tuple((big.strip(), caption.strip()) for big, caption in value)
+
+
 def _translations(entry: dict, keys: tuple) -> dict:
     """sites.toml's language tables (``[ko]``, ``[site.en-GB]`` ...): lang -> {key: text} with the keys allowed."""
     found = {}
@@ -824,7 +917,9 @@ def _translations(entry: dict, keys: tuple) -> dict:
             if key not in table:
                 continue
             value = table[key]
-            if key in ("tags", "points", "links"):
+            if key == "facts":
+                value = _facts(value, f"[{lang}] の ")
+            elif key in ("tags", "points", "links"):
                 if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
                     raise ValueError(f'[{lang}] の {key} は文字列の並び（["…", "…"]）です。')
                 value = tuple(value) if key == "tags" else value
@@ -833,6 +928,37 @@ def _translations(entry: dict, keys: tuple) -> dict:
             texts[key] = value
         found[lang] = texts
     return found
+
+
+def _words(text: str) -> str:
+    """The opening headline, each phrase (up to its 。 . , 、) in its own span, so they can come in one after another."""
+    parts = re.findall(r"(.+?(?:[。．.,、，!！?？]|$))(\s*)", text.strip())
+    spans = [f'<span class="w">{html.escape(word)}</span>{" " if gap else ""}' for word, gap in parts if word]
+    return "".join(spans).rstrip()
+
+
+def _anchor(site: Site) -> str:
+    """The id of a site's section (the nav jumps to it): its mount without slashes, "news" for /news."""
+    word = site.mount.strip("/").replace("/", "-") or "site"
+    return word if word not in ("top", "theme") else f"site-{word}"
+
+
+def _hint(site: Site, lang: str) -> str:
+    return site.say(lang, "search_hint") or i18n.text(lang, "{name} の中を検索", name=site.say(lang, "name"))
+
+
+def _search_form(home: str, where: str, hint: str, label: str, lang: str) -> str:
+    """A search box: on to the chosen site's own search through /search (``where`` names the site)."""
+    e = html.escape
+    say = _sayer(lang)
+    return (
+        f'<form class="find" action="{e(home)}search" method="get" role="search">{where}'
+        f'<input type="search" name="q" placeholder="{e(hint)}" aria-label="{e(label)}" '
+        f'maxlength="{SEARCH_CHARACTERS}" required autocapitalize="off" spellcheck="false" enterkeyhint="search">'
+        f'<button type="submit" title="{say("検索")}"><svg viewBox="0 0 24 24" aria-hidden="true">'
+        '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>'
+        f'<span class="words">{say("検索")}</span></button></form>'
+    )
 
 
 def _sayer(lang: str) -> Callable[..., str]:

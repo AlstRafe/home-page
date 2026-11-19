@@ -124,15 +124,17 @@ home_link = "own"
     def test_the_index_lists_the_sites_in_order_with_what_they_have_now(self):
         status, headers, page = call(self.portal, "/")
         self.assertEqual(status, 200)
-        self.assertIn('<h2><a href="/news/">NewsBridge</a></h2>', page)
-        self.assertIn('<h2><a href="/infra/">CoreLab</a></h2>', page)
+        self.assertIn('<section class="site accent-red band" id="news" aria-labelledby="news-name">', page)
+        self.assertIn("<span>NewsBridge</span></h2>", page)
+        self.assertIn("<span>CoreLab</span></h2>", page)
         self.assertLess(page.index("/news/"), page.index("/infra/"))
-        self.assertIn('<p class="sub">翻訳して読み比べるニュース</p>', page)  # the app's own subtitle
+        self.assertIn('<p class="headline">翻訳して読み比べるニュース</p>', page)  # no headline: the app's own subtitle
+        self.assertIn('<li><a href="#news">NewsBridge</a></li><li><a href="#infra">CoreLab</a></li>', page)  # the nav
         self.assertIn('href="/news/stories/a">台風が接近</a>', page)
         self.assertIn("取得 5分前", page)
         self.assertIn('<a class="open" href="/infra/">CoreLab を開く', page)
         self.assertIn("<li>登録不要</li>", page)
-        self.assertIn('class="site accent-teal"', page)
+        self.assertIn('class="site accent-teal side"', page)
         self.assertIn("<svg", page)  # the icon, inline
         self.assertIn("更新 ", page)  # the folder site's last change
         self.assertNotIn("{{", page)
@@ -312,7 +314,7 @@ name = "Memo"
         os.utime(self.game / "portal.json", (later, later))
         status, _, page = call(self.portal, "/")
         self.assertEqual(status, 200)
-        self.assertIn('<a href="/infra/">CoreLab</a>', page)
+        self.assertIn("<span>CoreLab</span></h2>", page)
         self.assertNotIn("初日の当番", page)
         self.write(self.config.read_text(encoding="utf-8").replace('"portal.json"', '"../secret.js"'))
         self.assertIn("preview はそのフォルダの中の .json", call(self.portal, "/")[2])
@@ -389,7 +391,7 @@ name = "Gone"
     def test_an_app_missing_from_sites_toml_is_still_served_and_one_not_provided_is_left_out(self):
         self.write('[[site]]\nmount = "/infra"\nfolder = "Infra Game"\nname = "CoreLab"\n')
         page = call(self.portal, "/")[2]
-        self.assertIn('<a href="/news/">NewsBridge</a>', page)
+        self.assertIn("<span>NewsBridge</span></h2>", page)
         self.assertLess(page.index("/infra/"), page.index("/news/"))
         alone = homepage.build([], config=self.config)  # Home Page on its own: no News Site
         self.write('[[site]]\napp = "news"\n\n[[site]]\nmount = "/infra"\nfolder = "Infra Game"\nname = "CoreLab"\n')
@@ -410,7 +412,7 @@ name = "Gone"
         page = call(self.portal, "/")[2]
         for number in (1, 2, 3, 5):
             self.assertIn(f"{number} 番目のサイト", page)
-        self.assertIn('<a href="/memo/">Memo</a>', page)
+        self.assertIn("<span>Memo</span></h2>", page)
         self.assertEqual(call(self.portal, "/news/x")[2], "news /news /x GET")
 
     def test_a_failing_preview_never_breaks_the_index(self):
@@ -418,7 +420,7 @@ name = "Gone"
         portal = homepage.build([broken], config=self.config)
         status, _, page = call(portal, "/")
         self.assertEqual(status, 200)
-        self.assertIn('<a href="/news/">NewsBridge</a>', page)
+        self.assertIn("<span>NewsBridge</span></h2>", page)
         self.assertNotIn('class="now"', page)
 
     def test_an_odd_preview_shows_what_it_can_and_never_breaks_the_index(self):
@@ -463,17 +465,17 @@ name = "Gone"
         )
         status, headers, page = call(self.portal, "/", HTTP_COOKIE="lang=ko")
         self.assertIn('<html lang="ko">', page)
-        self.assertIn("<h1>사이트 목록</h1>", page)
+        self.assertIn('<h1><span class="w">사이트 목록</span></h1>', page)
         self.assertIn("<li>무료</li>", page)
         self.assertIn("小さなサイトの入口です。", page)  # a text without a translation stays Japanese
-        self.assertIn('<p class="sub">인프라 운영 트레이닝 게임</p>', page)
+        self.assertIn('<p class="headline">인프라 운영 트레이닝 게임</p>', page)
         self.assertIn("<li>설치 불필요</li>", page)
         self.assertIn("CoreLab 열기", page)
         self.assertIn("사이트 2개", page)
         self.assertIn('<a href="?lang=ko" lang="ko" hreflang="ko" aria-current="true">한국어</a>', page)
         self.assertIn('<a href="?lang=en-GB" lang="en-GB" hreflang="en-GB">English (UK)</a>', page)
         self.assertIn("Cookie", headers["Vary"])
-        self.assertIn('<p class="sub">翻訳して読み比べるニュース</p>', page)  # no [site.ko] for News: its own
+        self.assertIn('<p class="headline">翻訳して読み比べるニュース</p>', page)  # no [site.ko] for News: its own
         english = call(self.portal, "/", HTTP_ACCEPT_LANGUAGE="en-US,en;q=0.9,ja;q=0.5")[2]
         self.assertIn('<html lang="en-GB">', english)
         self.assertIn("Open CoreLab", english)
@@ -682,14 +684,85 @@ public = false
     def test_a_cards_shortcuts_in_the_visitors_language(self):
         self.search_and_links()
         page = call(self.portal, "/")[2]
-        self.assertIn('<nav class="links" aria-label="NewsBridge: よく使うページ">', page)
+        more = '<a class="more" href="/news/{}">{}<span aria-hidden="true">›</span></a>'
+        # With a preview, the shortcuts are "›" links beside the open button
         self.assertIn(
-            '<li><a href="/news/digest">今日のまとめ</a></li><li><a href="/news/stories">読み比べ一覧</a></li>', page
+            '<a class="open" href="/news/">NewsBridge を開く</a>'
+            + more.format("digest", "今日のまとめ")
+            + more.format("stories", "読み比べ一覧"),
+            page,
         )
         korean = call(self.portal, "/", HTTP_COOKIE="lang=ko")[2]
-        self.assertIn('<a href="/news/digest">오늘의 요약</a>', korean)
-        self.assertIn('<a href="/news/stories">목록</a>', korean)
-        self.assertIn('<a href="/news/digest">今日のまとめ</a>', call(self.portal, "/", HTTP_COOKIE="lang=en-GB")[2])
+        self.assertIn(more.format("digest", "오늘의 요약"), korean)
+        self.assertIn(more.format("stories", "목록"), korean)
+        self.assertIn(more.format("digest", "今日のまとめ"), call(self.portal, "/", HTTP_COOKIE="lang=en-GB")[2])
+        # Without one, they fill the preview's screen as tiles, with their addresses
+        self.write(
+            self.config.read_text(encoding="utf-8").replace(
+                'app = "news"', 'mount = "/memo"\nfolder = "Memo"\nname = "Memo"'
+            )
+        )
+        page = call(self.portal, "/")[2]
+        self.assertIn('<nav class="links" aria-label="Memo: よく使うページ"><ul>', page)
+        self.assertIn('<li><a href="/memo/digest"><b>今日のまとめ</b><code>/memo/digest</code></a></li>', page)
+
+    def test_a_sites_section_has_a_headline_facts_and_may_be_the_dark_plate(self):
+        self.write(
+            self.config.read_text(encoding="utf-8")
+            .replace('title = "サイト一覧"', 'title = "サイト一覧"\nheadline = "読む。学ぶ。"')
+            .replace(
+                'home_link = "own"',
+                'home_link = "own"\nheadline = "障害対応を練習。"\ndark = true\n'
+                'facts = [["25", "ミッション"], ["無料", "インストール不要"]]\n'
+                'search = "/#/ref?q={q}"\n\n[site.en-GB]\nheadline = "Practise."\nfacts = [["25", "missions"]]',
+            )
+        )
+        page = call(self.portal, "/")[2]
+        self.assertIn('<h1><span class="w">読む。</span><span class="w">学ぶ。</span></h1>', page)
+        self.assertIn('<a class="brand" href="#top">サイト一覧</a>', page)
+        # the second section stands beside its preview on a computer
+        self.assertIn('<section class="site accent-teal plate side" id="infra" aria-labelledby="infra-name">', page)
+        self.assertIn('<p class="headline">障害対応を練習。</p>', page)
+        # the subtitle moves to the screen's bar
+        self.assertIn('<span class="sub">インフラ運用トレーニングゲーム</span>', page)
+        self.assertIn(
+            '<ul class="facts" aria-label="CoreLab: 特徴"><li><b>25</b><span>ミッション</span></li>'
+            "<li><b>無料</b><span>インストール不要</span></li></ul>",
+            page,
+        )
+        self.assertIn('<ul class="tags" aria-label="NewsBridge: 特徴"><li>毎時更新</li></ul>', page)  # no facts: tags
+        # One site with a search box: the opening screen's box searches it, no menu
+        self.assertIn(
+            '<input type="hidden" name="site" value="/infra"><input type="search" name="q" placeholder="CoreLab の中を検索"',
+            page,
+        )
+        self.assertNotIn("<select", page)
+        english = call(self.portal, "/", HTTP_COOKIE="lang=en-GB")[2]
+        self.assertIn('<p class="headline">Practise.</p>', english)
+        self.assertEqual(
+            homepage._words("Read. Learn. Look it up."),
+            '<span class="w">Read.</span> <span class="w">Learn.</span> <span class="w">Look it up.</span>',
+        )
+        self.assertIn("<li><b>25</b><span>missions</span></li></ul>", english)
+        # Two: a menu of the sites
+        self.write(self.config.read_text(encoding="utf-8").replace('app = "news"', 'app = "news"\nsearch = "/?q={q}"'))
+        page = call(self.portal, "/")[2]
+        self.assertIn(
+            '<select name="site" aria-label="検索するサイト"><option value="/news">NewsBridge</option>'
+            '<option value="/infra">CoreLab</option></select><input type="search" name="q" placeholder="サイトを選んで検索"',
+            page,
+        )
+        for wrong in (
+            'facts = [["25"]]',
+            'facts = "25"',
+            'facts = [["1", "a"], ["2", "b"], ["3", "c"], ["4", "d"], ["5", "e"]]',
+        ):
+            self.write(f'[[site]]\nmount = "/infra"\nfolder = "Infra Game"\nname = "CoreLab"\n{wrong}\n')
+            self.assertIn("facts は [[", call(self.portal, "/")[2], wrong)
+        self.write('[[site]]\nmount = "/infra"\nfolder = "Infra Game"\nname = "CoreLab"\ndark = "yes"\n')
+        self.assertIn("dark は true か false です。", call(self.portal, "/")[2])
+        self.write('[[site]]\nmount = "/infra"\nfolder = "Infra Game"\nname = "CoreLab"\n[site.ko]\nfacts = [["1"]]\n')
+        self.assertIn("[ko] の facts は [[", call(self.portal, "/")[2])
 
     def test_mistakes_in_search_and_shortcuts_are_explained_to_the_owner(self):
         self.search_and_links(links_ko='["하나"]')
