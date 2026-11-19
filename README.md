@@ -99,7 +99,8 @@ python -m homepage --demo
 - `/version.json` は、いま公開中の各サイトのコミット（`"/"` が Home Page）とサーバーの起動時刻を返す。
   Home Page の新しい .py は再起動してから、ページ・CSS・sites.toml・フォルダのサイトはすぐに数える
 - Live site（`.github/workflows/live.yml`）は master への push のあと、`deploy/livecheck.py --expect <コミット>` で
-  その版が出るのを待ってから（最大 8 分）ページを確かめる。ほかのリポジトリでも `--site /val` で同じように待てる
+  その版が出るのを待ってから（最大 8 分）ページを確かめる。ほかのリポジトリでも `--site /val` で同じように待てる。
+  ほかのリポジトリのマージは、Live site を手動で実行し site（`/infra` など）と commit（マージのコミット全体）を入れると同じ確認になる
 - 一覧の下の持ち主向けの欄に、各サイトの版と届いた時刻、再起動待ちかどうか、VM の負荷・メモリ・スワップ・ディスクが出る（訪問者には出ない）
 - 一覧はスマホのホーム画面にアプリとして追加できる（`/portal.webmanifest`。iPhone は apple-touch-icon）
 

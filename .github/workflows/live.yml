@@ -13,6 +13,14 @@ on:
         description: "Address to check instead of the usual one (https://name)"
         required: false
         default: ""
+      site:
+        description: 'Site whose commit to wait for first, e.g. /infra or /val (with "commit")'
+        required: false
+        default: "/"
+      commit:
+        description: "Full commit SHA that site should be serving (another repository's merge)"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -30,7 +38,9 @@ jobs:
       - uses: actions/checkout@v6
       # After a push it first waits until /version.json says the pushed commit is live (the VM pulls
       # master every minute, then restarts into new code), then checks the pages as they are now.
-      - run: python3 -u deploy/livecheck.py ${URL:+"$URL"} ${EXPECT:+--expect "$EXPECT"}
+      # Run by hand with site + commit, it confirms another repository's merge is live the same way.
+      - run: python3 -u deploy/livecheck.py ${URL:+"$URL"} ${EXPECT:+--expect "$EXPECT" --site "$SITE"}
         env:
           URL: ${{ inputs.url }}
-          EXPECT: ${{ github.event_name == 'push' && github.sha || '' }}
+          SITE: ${{ inputs.site || '/' }}
+          EXPECT: ${{ github.event_name == 'push' && github.sha || inputs.commit || '' }}
