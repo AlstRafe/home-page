@@ -1,90 +1,61 @@
-/* The shared look of every site on the portal (docs/CONVENTIONS.md 「デザインの共通トークン」): warm paper and ink
-   (never pure white or black), translucent surfaces over a faint wash of the sites' colours, soft shadows, round corners.
-   Paper, ink and red are NewsBridge's too, so moving between the list and a site keeps one page colour. */
+/* The shared look of every site on the portal (docs/CONVENTIONS.md 「デザインの共通トークン」): "藍刷り", a two-colour
+   print. Indigo ink and 山吹 (a soft mustard) on a cool paper, flat, ruled, set in type. No glow, glass or soft shadows. */
 :root {
-  --paper: #f5f3ef;
-  --card: #fffdf9;
-  --surface: rgb(255 253 249 / 74%);
-  --surface-pop: rgb(255 253 249 / 92%);
-  --field: rgb(245 243 239 / 72%);
-  --ink: #1e1d1b;
-  --soft: #5c5952;
-  --rule: #dcd7cd;
-  --line-hi: rgb(255 255 255 / 75%);
-  --accent: #a8352c;
-  --on-a: #fff;
+  --paper: #edf0f2;
+  --card: #f8f9fa;
+  --ink: #19223a;
+  --soft: #4c5770;
+  --rule: #c9d0da;
+  --link: #2a4a8f;
+  /* The second colour: fills, highlights, big decorative numerals. Never text on the paper (too light). */
+  --mark: #e8b04a;
+  --on-mark: #19223a;
+  --accent: var(--link);
+  --on-a: #f8f9fa;
   --warn: #8a4b00;
-  /* The wash behind everything: the sites' colours, faint (at most 14% in light, 16% in dark) */
-  --wash-1: rgb(168 53 44 / 14%);
-  --wash-2: rgb(15 111 104 / 14%);
-  --wash-3: rgb(107 63 160 / 12%);
-  --wash-4: rgb(143 84 0 / 10%);
-  --r-s: 10px;
-  --r-m: 14px;
-  --r-l: 20px;
-  --r-pill: 999px;
-  --shadow-1: 0 1px 2px rgb(40 30 20 / 5%), 0 12px 32px -16px rgb(40 30 20 / 16%);
-  --shadow-2: 0 2px 4px rgb(40 30 20 / 6%), 0 22px 48px -20px rgb(40 30 20 / 24%);
-  --shadow-pop: 0 16px 40px -12px rgb(40 30 20 / 22%);
-  /* How much accent colour a filled button's shadow has (none in dark: a coloured glow there looks like neon) */
-  --glow: 45%;
-  /* How much of the accent a filled button is (a little paper in dark, so the fill is calmer) */
-  --fill: 100%;
-  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --t: 180ms;
+  --dots: 0.55;
+  /* Filled buttons: ink on light; the second colour on dark (a near-white block would glare) */
+  --btn: var(--ink);
+  --on-btn: var(--paper);
+  --r: 2px;
+  --t: 120ms;
   --serif: "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", "Noto Serif JP", serif;
   --mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
-  --sans: "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+  --sans: "Hiragino Sans", "Yu Gothic UI", "Meiryo", "Noto Sans JP", system-ui, sans-serif;
 }
 /* Dark: the device's setting unless the visitor chose with the header's button (<html data-theme>, set by the page's script).
-   Softer accents than full colour (no neon on a dark page) and an off-white ink. */
+   A night indigo, not black; off-white ink, not white. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --paper: #141413;
-    --card: #1e1d1b;
-    --surface: rgb(30 29 27 / 70%);
-    --surface-pop: rgb(34 33 31 / 92%);
-    --field: rgb(20 20 19 / 55%);
-    --ink: #e9e6df;
-    --soft: #a7a39b;
-    --rule: #353330;
-    --line-hi: rgb(255 255 255 / 6%);
-    --accent: #e2877c;
-    --on-a: #141310;
+    --paper: #141822;
+    --card: #1b2030;
+    --ink: #e3e6ec;
+    --soft: #a4adbd;
+    --rule: #2d3446;
+    --link: #9db4ec;
+    --mark: #d8ab52;
+    --on-mark: #141822;
+    --on-a: #141822;
     --warn: #e8b866;
-    --wash-1: rgb(226 135 124 / 14%);
-    --wash-2: rgb(108 201 188 / 12%);
-    --wash-3: rgb(187 160 230 / 11%);
-    --wash-4: rgb(232 184 102 / 8%);
-    --shadow-1: 0 1px 2px rgb(0 0 0 / 35%), 0 12px 32px -16px rgb(0 0 0 / 55%);
-    --shadow-2: 0 2px 4px rgb(0 0 0 / 40%), 0 22px 48px -20px rgb(0 0 0 / 65%);
-    --shadow-pop: 0 16px 40px -12px rgb(0 0 0 / 60%);
-    --glow: 0%;
-    --fill: 86%;
+    --dots: 0.3;
+    --btn: var(--mark);
+    --on-btn: var(--on-mark);
   }
 }
 :root[data-theme="dark"] {
-  --paper: #141413;
-  --card: #1e1d1b;
-  --surface: rgb(30 29 27 / 70%);
-  --surface-pop: rgb(34 33 31 / 92%);
-  --field: rgb(20 20 19 / 55%);
-  --ink: #e9e6df;
-  --soft: #a7a39b;
-  --rule: #353330;
-  --line-hi: rgb(255 255 255 / 6%);
-  --accent: #e2877c;
-  --on-a: #141310;
+  --paper: #141822;
+  --card: #1b2030;
+  --ink: #e3e6ec;
+  --soft: #a4adbd;
+  --rule: #2d3446;
+  --link: #9db4ec;
+  --mark: #d8ab52;
+  --on-mark: #141822;
+  --on-a: #141822;
   --warn: #e8b866;
-  --wash-1: rgb(226 135 124 / 14%);
-  --wash-2: rgb(108 201 188 / 12%);
-  --wash-3: rgb(187 160 230 / 11%);
-  --wash-4: rgb(232 184 102 / 8%);
-  --shadow-1: 0 1px 2px rgb(0 0 0 / 35%), 0 12px 32px -16px rgb(0 0 0 / 55%);
-  --shadow-2: 0 2px 4px rgb(0 0 0 / 40%), 0 22px 48px -20px rgb(0 0 0 / 65%);
-  --shadow-pop: 0 16px 40px -12px rgb(0 0 0 / 60%);
-  --glow: 0%;
-  --fill: 86%;
+  --dots: 0.3;
+  --btn: var(--mark);
+  --on-btn: var(--on-mark);
   color-scheme: dark;
 }
 :root[data-theme="light"] {
@@ -107,14 +78,18 @@ html:lang(ko) body {
   word-break: keep-all;
   overflow-wrap: anywhere;
 } /* Korean wraps between words, not inside them */
+/* Each site's own colour, only for small marks (sites.toml accent) */
 .accent-red {
-  --a: #a8352c;
+  --a: #b5341f;
+}
+.accent-orange {
+  --a: #ac3f0e;
 }
 .accent-blue {
-  --a: #1f5fbf;
+  --a: #2a4a8f;
 }
 .accent-teal {
-  --a: #0f6f68;
+  --a: #1f6e66;
 }
 .accent-green {
   --a: #2c7430;
@@ -126,17 +101,20 @@ html:lang(ko) body {
   --a: #6b3fa0;
 }
 .accent-gray {
-  --a: #55524c;
+  --a: #4c5770;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .accent-red {
-    --a: #e2877c;
+    --a: #e8826d;
+  }
+  :root:not([data-theme="light"]) .accent-orange {
+    --a: #ec915e;
   }
   :root:not([data-theme="light"]) .accent-blue {
-    --a: #8cb2f0;
+    --a: #9db4ec;
   }
   :root:not([data-theme="light"]) .accent-teal {
-    --a: #6cc9bc;
+    --a: #7cc2b6;
   }
   :root:not([data-theme="light"]) .accent-green {
     --a: #8cc98e;
@@ -148,17 +126,20 @@ html:lang(ko) body {
     --a: #bba0e6;
   }
   :root:not([data-theme="light"]) .accent-gray {
-    --a: #b3afa6;
+    --a: #a4adbd;
   }
 }
 :root[data-theme="dark"] .accent-red {
-  --a: #e2877c;
+  --a: #e8826d;
+}
+:root[data-theme="dark"] .accent-orange {
+  --a: #ec915e;
 }
 :root[data-theme="dark"] .accent-blue {
-  --a: #8cb2f0;
+  --a: #9db4ec;
 }
 :root[data-theme="dark"] .accent-teal {
-  --a: #6cc9bc;
+  --a: #7cc2b6;
 }
 :root[data-theme="dark"] .accent-green {
   --a: #8cc98e;
@@ -170,8 +151,9 @@ html:lang(ko) body {
   --a: #bba0e6;
 }
 :root[data-theme="dark"] .accent-gray {
-  --a: #b3afa6;
+  --a: #a4adbd;
 }
+
 * {
   box-sizing: border-box;
 }
@@ -182,125 +164,94 @@ html {
 }
 body {
   margin: 0 auto;
-  max-width: 75rem;
-  padding: 3rem 1rem 2.5rem;
+  max-width: 78rem;
+  padding: 0 1.25rem 2.5rem;
   font: 16px/1.75 var(--sans);
 }
-/* The wash: a few large, soft colour pools fixed behind the page (the body has no background of its own, so it shows).
-   It drifts very slowly; nothing moves for visitors who ask for less motion. */
-body::before {
-  content: "";
-  position: fixed;
-  inset: -6vmax;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(48vmax 36vmax at 12% 4%, var(--wash-1), transparent 72%),
-    radial-gradient(44vmax 34vmax at 88% 10%, var(--wash-2), transparent 72%),
-    radial-gradient(52vmax 38vmax at 64% 100%, var(--wash-3), transparent 72%),
-    radial-gradient(38vmax 32vmax at 2% 72%, var(--wash-4), transparent 72%);
-  animation: drift 70s ease-in-out infinite alternate;
-}
-@keyframes drift {
-  50% {
-    transform: translate3d(2vmax, -1.5vmax, 0) scale(1.04);
-  }
-  100% {
-    transform: translate3d(-1.5vmax, 1vmax, 0) scale(1.02);
-  }
-}
 ::selection {
-  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  background: var(--mark);
+  color: var(--on-mark);
 }
-a:focus-visible {
-  outline: 2px solid var(--a, var(--accent));
-  outline-offset: 3px;
-  border-radius: 4px;
-}
-/* Headings: proportional kana spacing, balanced lines, and Japanese broken between phrases (where the browser can) */
-h1,
-h2,
-.lead,
-.desc {
-  text-wrap: pretty;
+:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
 }
 h1,
 h2 {
   font-feature-settings: "palt";
   text-wrap: balance;
 }
+p {
+  text-wrap: pretty;
+}
 :lang(ja) :is(h1, h2, .lead) {
   word-break: auto-phrase;
 }
-
-header {
-  padding-bottom: 1.8rem;
-  margin-bottom: 1.4rem;
+a {
+  color: var(--link);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+  transition:
+    color var(--t) linear,
+    background-color var(--t) linear,
+    text-decoration-color var(--t) linear;
 }
-.bar {
+
+/* The top line: the date on the left, light/dark and language on the right, one ink rule under them */
+.top {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  padding: 1.1rem 0 0.9rem;
+  border-bottom: 1px solid var(--ink);
 }
-/* The date, as a small label with a dot in the portal's colours (a long date wraps under itself on a phone) */
 .date {
   min-width: 0;
   margin: 0;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
   color: var(--soft);
-  letter-spacing: 0.06em;
 }
 .date::before {
   content: "";
   display: inline-block;
-  width: 0.5rem;
-  height: 0.5rem;
-  margin-right: 0.55rem;
-  vertical-align: 0.05em;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 30%, #0f6f68));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-right: 0.6rem;
+  vertical-align: 0.02em;
+  background: var(--mark);
 }
-
 .tools {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   flex: none;
 }
-/* The header's buttons (light/dark, language): small frosted pills */
+/* The header's buttons (light/dark, language): plain ruled boxes, the second colour on hover */
 .theme,
 .lang summary {
   display: inline-flex;
   align-items: center;
   min-height: 2.25rem;
-  padding: 0 0.85rem;
-  border: 1px solid color-mix(in srgb, var(--rule) 80%, transparent);
-  border-radius: var(--r-pill);
-  background: var(--surface);
-  box-shadow:
-    inset 0 1px 0 var(--line-hi),
-    0 1px 2px rgb(0 0 0 / 4%);
+  padding: 0 0.8rem;
+  border: 1px solid var(--ink);
+  border-radius: var(--r);
+  background: transparent;
   color: var(--ink);
   font: inherit;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   cursor: pointer;
-  transition:
-    border-color var(--t) var(--ease),
-    background-color var(--t) var(--ease);
+  transition: background-color var(--t) linear;
 }
 .theme:hover,
-.lang summary:hover {
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--rule));
-  background: var(--surface-pop);
+.lang summary:hover,
+.lang[open] summary {
+  background: var(--mark);
+  color: var(--on-mark);
 }
 /* The light/dark button: automatic (the device's setting) -> light -> dark, the same choice as News Site's and CoreLab's;
    every state's icon and words are in the page and the current one is shown. */
-.theme:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-}
 .theme > span {
   display: none;
   align-items: center;
@@ -311,7 +262,8 @@ header {
 :root[data-theme="dark"] .t-dark {
   display: inline-flex;
 }
-.theme svg {
+.theme svg,
+.lang svg {
   width: 1rem;
   height: 1rem;
   fill: none;
@@ -360,183 +312,142 @@ header {
 .lang[open] summary::after {
   transform: translateY(1px) rotate(225deg);
 }
-.lang summary:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-}
-.lang svg {
-  width: 1rem;
-  height: 1rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-}
+/* The open menu: a sheet with a print offset in the second colour */
 .lang ul {
   position: absolute;
   right: 0;
-  top: calc(100% + 0.45rem);
+  top: calc(100% + 0.4rem);
   z-index: 5;
   min-width: 11.5rem;
   margin: 0;
-  padding: 0.35rem;
+  padding: 0.3rem 0;
   list-style: none;
-  background: var(--surface-pop);
-  -webkit-backdrop-filter: blur(18px) saturate(1.2);
-  backdrop-filter: blur(18px) saturate(1.2);
-  border: 1px solid color-mix(in srgb, var(--rule) 85%, transparent);
-  border-radius: var(--r-m);
-  box-shadow:
-    inset 0 1px 0 var(--line-hi),
-    var(--shadow-pop);
-  animation: pop var(--t) var(--ease);
+  background: var(--card);
+  border: 1px solid var(--ink);
+  border-radius: var(--r);
+  box-shadow: 4px 4px 0 var(--mark);
 }
-@keyframes pop {
-  from {
-    opacity: 0;
-    transform: translateY(-4px) scale(0.98);
-  }
+.lang li + li {
+  border-top: 1px solid var(--rule);
 }
 .lang a {
   display: flex;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.55rem 0.75rem;
-  border-radius: calc(var(--r-m) - 0.35rem);
+  padding: 0.5rem 0.85rem;
   color: var(--ink);
   text-decoration: none;
 }
 .lang a:hover {
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  background: color-mix(in srgb, var(--mark) 30%, transparent);
 }
 .lang a:focus-visible {
-  outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
 .lang a[aria-current] {
   font-weight: 700;
-  color: var(--accent);
+  color: var(--link);
 }
 .lang a[aria-current]::after {
   content: "✓";
 }
+
+/* The page: the title in its own column on a computer, set vertically like a book's spine; the rest beside it */
+.page {
+  position: relative;
+}
+/* Halftone dots in the second colour, fading out, in the empty corner by the title (never under the text) */
+.page::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: -1;
+  width: min(48vw, 34rem);
+  height: 15rem;
+  background: radial-gradient(circle, var(--mark) 1.4px, transparent 1.9px) 0 0 / 11px 11px;
+  opacity: var(--dots);
+  -webkit-mask-image: radial-gradient(ellipse at 100% 0%, #000 15%, transparent 70%);
+  mask-image: radial-gradient(ellipse at 100% 0%, #000 15%, transparent 70%);
+  pointer-events: none;
+}
 h1 {
-  margin: 0.9rem 0 0;
-  font: 600 clamp(2.1rem, 1.5rem + 2.2vw, 2.9rem) / 1.25 var(--serif);
-  letter-spacing: 0.05em;
+  margin: 2rem 0 0;
+  font: 600 clamp(2.4rem, 1.8rem + 2.6vw, 3.4rem) / 1.15 var(--serif);
+  letter-spacing: 0.08em;
+}
+.intro {
+  padding: 0.9rem 0 2rem;
 }
 .lead {
-  margin: 0.8rem 0 0;
-  max-width: 40rem;
-  font-size: 1.04rem;
-  color: color-mix(in srgb, var(--ink) 82%, var(--soft));
+  margin: 0;
+  max-width: 34rem;
+  font-size: 1.08rem;
+  line-height: 1.85;
 }
-/* What every site shares, as quiet chips */
+/* What every site shares: one line of ticked words */
 .points {
   list-style: none;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.45rem;
-  margin: 1.1rem 0 0;
+  gap: 0.2rem 1.3rem;
+  margin: 1rem 0 0;
   padding: 0;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
   color: var(--soft);
-}
-.points li {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.15rem 0.8rem 0.15rem 0.6rem;
-  border: 1px solid color-mix(in srgb, var(--rule) 70%, transparent);
-  border-radius: var(--r-pill);
-  background: color-mix(in srgb, var(--surface) 70%, transparent);
 }
 .points li::before {
   content: "✓";
   margin-right: 0.4rem;
-  color: var(--accent);
+  color: var(--ink);
   font-weight: 700;
 }
 
+/* The list: a table of contents, one site per ruled row */
 .sites {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: grid;
-  gap: 1.1rem;
-  /* Three side by side on a computer (1024px and up), one under the other on a phone */
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 19.5rem), 1fr));
+  border-top: 2px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
 }
-/* A site's card: a translucent sheet over the wash, its own colour as a soft light in the top corner */
 .site {
-  position: relative;
-  isolation: isolate;
-  display: flex;
-  flex-direction: column;
-  padding: 1.35rem 1.35rem 1.25rem;
-  background: var(--surface);
-  border: 1px solid color-mix(in srgb, var(--rule) 75%, transparent);
-  border-radius: var(--r-l);
-  box-shadow:
-    inset 0 1px 0 var(--line-hi),
-    var(--shadow-1);
-  transition:
-    transform var(--t) var(--ease),
-    box-shadow var(--t) var(--ease),
-    border-color var(--t) var(--ease);
+  display: grid;
+  grid-template-columns: 3.4rem minmax(0, 1fr);
+  column-gap: 1rem;
+  padding: 1.4rem 0 1.6rem;
 }
-.site::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  background:
-    linear-gradient(90deg, var(--a), color-mix(in srgb, var(--a) 0%, transparent) 70%) top / 100% 3px no-repeat,
-    radial-gradient(120% 70% at 0% 0%, color-mix(in srgb, var(--a) 10%, transparent), transparent 60%);
-  pointer-events: none;
-}
-@media (hover: hover) {
-  .site:hover {
-    transform: translateY(-2px);
-    border-color: color-mix(in srgb, var(--a) 30%, var(--rule));
-    box-shadow:
-      inset 0 1px 0 var(--line-hi),
-      var(--shadow-2);
-  }
+.site + .site {
+  border-top: 1px solid var(--rule);
 }
 .site-head {
-  display: flex;
-  align-items: center;
-  gap: 0.9rem;
+  display: contents;
+}
+/* The site's number, large, in the second colour (decoration: aria-hidden) */
+.no {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: start;
+  font: 600 2.6rem/1 var(--serif);
+  font-feature-settings: "lnum", "tnum";
+  letter-spacing: -0.02em;
+  color: var(--mark);
 }
 .icon {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 3rem;
-  height: 3rem;
-  border-radius: var(--r-m);
-  color: var(--a);
-  background: linear-gradient(
-    145deg,
-    color-mix(in srgb, var(--a) 20%, transparent),
-    color-mix(in srgb, var(--a) 6%, transparent)
-  );
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--a) 18%, transparent);
-}
-.icon svg {
-  width: 1.65rem;
-  height: 1.65rem;
-}
-.letter {
-  font: 700 1.4rem/1 var(--serif);
+  display: none;
 }
 .site-name {
-  flex: 1;
+  grid-column: 2;
+  grid-row: 1;
   min-width: 0;
+}
+.site > :not(.site-head) {
+  grid-column: 1 / -1;
 }
 .site h2 {
   margin: 0;
-  font: 600 1.45rem/1.3 var(--serif);
+  font: 600 1.6rem/1.25 var(--serif);
   letter-spacing: 0.01em;
 }
 .site h2 a {
@@ -545,73 +456,77 @@ h1 {
 }
 .site h2 a:hover {
   text-decoration: underline;
-  text-decoration-color: var(--a);
-  text-decoration-thickness: 2px;
-  text-underline-offset: 0.25em;
+  text-decoration-color: var(--mark);
+  text-decoration-thickness: 0.18em;
+  text-underline-offset: 0.18em;
 }
+/* The subtitle, with a small square in the site's own colour */
 .sub {
-  margin: 0.15rem 0 0;
-  font-size: 0.86rem;
-  font-weight: 600;
-  color: var(--a);
-}
-.no {
-  align-self: flex-start;
-  font: 500 0.78rem/1.6 var(--mono);
+  margin: 0.3rem 0 0;
+  font-size: 0.84rem;
+  letter-spacing: 0.04em;
   color: var(--soft);
-  letter-spacing: 0.08em;
+}
+.sub::before {
+  content: "";
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.5rem;
+  vertical-align: 0.05em;
+  background: var(--a);
 }
 .desc {
-  margin: 0.95rem 0 0;
-  font-size: 0.93rem;
+  margin: 1rem 0 0;
+  max-width: 40rem;
+  font-size: 0.94rem;
   color: var(--soft);
 }
 .tags {
   list-style: none;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
-  margin: 0.85rem 0 0;
+  gap: 0.15rem 1.1rem;
+  margin: 0.7rem 0 0;
   padding: 0;
-}
-.tags li {
-  padding: 0.1rem 0.7rem;
   font-size: 0.78rem;
-  line-height: 1.7;
-  border-radius: var(--r-pill);
-  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  letter-spacing: 0.04em;
+}
+.tags li::before {
+  content: "";
+  display: inline-block;
+  width: 0.3rem;
+  height: 0.3rem;
+  margin-right: 0.45rem;
+  vertical-align: 0.2em;
+  background: var(--soft);
 }
 
-/* The card's search box: on to the site's own search (/search?site=...) */
+/* The row's search box: on to the site's own search (/search?site=...) */
 .find {
   display: flex;
-  gap: 0.4rem;
-  margin: 1rem 0 0;
+  max-width: 30rem;
+  margin: 1.1rem 0 0;
 }
 .find input {
   flex: 1;
   min-width: 0;
   min-height: 2.6rem;
-  padding: 0 0.85rem;
-  border: 1px solid var(--rule);
-  border-radius: var(--r-s);
-  background: var(--field);
+  padding: 0 0.8rem;
+  border: 1px solid var(--ink);
+  border-right: 0;
+  border-radius: var(--r) 0 0 var(--r);
+  background: var(--card);
   color: var(--ink);
   font: inherit;
-  font-size: 0.93rem;
-  transition:
-    border-color var(--t) var(--ease),
-    box-shadow var(--t) var(--ease);
+  font-size: 0.92rem;
 }
 .find input::placeholder {
   color: var(--soft);
   opacity: 1;
 }
-/* Focus: the field's own colour and a soft ring (the transparent outline stays for forced colours) */
 .find input:focus-visible {
-  outline: 2px solid transparent;
-  border-color: var(--a);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--a) 24%, transparent);
+  outline-offset: 0;
 }
 .find button {
   flex: none;
@@ -620,15 +535,31 @@ h1 {
   width: 2.75rem;
   min-height: 2.6rem;
   padding: 0;
-  border: 1px solid color-mix(in srgb, var(--a) 40%, transparent);
-  border-radius: var(--r-s);
-  background: color-mix(in srgb, var(--a) 8%, transparent);
-  color: var(--a);
+  border: 1px solid var(--ink);
+  border-radius: 0 var(--r) var(--r) 0;
+  background: var(--btn);
+  color: var(--on-btn);
   font: inherit;
-  font-size: 0.9rem;
-  font-weight: 700;
   cursor: pointer;
-  transition: background-color var(--t) var(--ease);
+  transition:
+    background-color var(--t) linear,
+    color var(--t) linear;
+}
+.find button:hover {
+  background: var(--mark);
+  color: var(--on-mark);
+}
+:root[data-theme="dark"] .find button:hover,
+:root[data-theme="dark"] .open:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .find button:hover,
+  :root:not([data-theme="light"]) .open:hover {
+    background: var(--ink);
+    color: var(--paper);
+  }
 }
 .find svg {
   width: 1.15rem;
@@ -647,21 +578,14 @@ h1 {
   clip-path: inset(50%);
   white-space: nowrap;
 }
-.find button:hover {
-  background: color-mix(in srgb, var(--a) 16%, transparent);
-}
-.find button:focus-visible {
-  outline: 2px solid var(--a);
-  outline-offset: 2px;
-}
 
-/* The card's shortcuts (sites.toml links) */
+/* The row's shortcuts (sites.toml links) */
 .links ul {
   list-style: none;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.15rem 1.1rem;
-  margin: 0.9rem 0 0;
+  gap: 0 1.2rem;
+  margin: 0.8rem 0 0;
   padding: 0;
   font-size: 0.88rem;
 }
@@ -669,57 +593,65 @@ h1 {
   display: inline-flex;
   align-items: center;
   min-height: 2rem;
-  color: var(--a);
   font-weight: 600;
-  text-decoration: none;
-}
-.links a::after {
-  content: "›";
-  margin-left: 0.3em;
-  transition: transform var(--t) var(--ease);
+  text-decoration-color: color-mix(in srgb, var(--link) 35%, transparent);
 }
 .links a:hover {
-  text-decoration: underline;
-  text-underline-offset: 0.2em;
+  text-decoration-color: currentColor;
 }
-.links a:hover::after {
-  transform: translateX(2px);
+.links a::after {
+  content: "→";
+  margin-left: 0.35em;
+  font-weight: 400;
 }
 
+/* What the site has now (CoreLab's missions, News Site's new articles): a small numbered contents list */
 .now {
+  max-width: 34rem;
   margin-top: 1.1rem;
-  padding: 0.6rem 0.9rem 0.2rem;
-  border-radius: var(--r-m);
-  background: color-mix(in srgb, var(--ink) 3.5%, transparent);
 }
 .now-head {
   display: flex;
   justify-content: space-between;
   gap: 0.5rem;
   margin: 0;
-  font-size: 0.78rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--ink);
+  font-size: 0.74rem;
+  letter-spacing: 0.12em;
   color: var(--soft);
-  letter-spacing: 0.04em;
 }
 .now ul {
   list-style: none;
-  margin: 0.1rem 0 0;
+  margin: 0;
   padding: 0;
+  counter-reset: now;
 }
-.now li + li {
-  border-top: 1px solid color-mix(in srgb, var(--rule) 70%, transparent);
+.now li {
+  display: flex;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--rule);
+  counter-increment: now;
+}
+.now li::before {
+  content: counter(now);
+  flex: none;
+  width: 1rem;
+  padding-top: 0.5rem;
+  font: 0.78rem/1.6 var(--mono);
+  color: var(--soft);
 }
 .now a {
   display: block;
-  padding: 0.45rem 0;
-  font: 600 0.97rem/1.6 var(--serif);
+  flex: 1;
+  padding: 0.42rem 0;
+  font: 600 0.96rem/1.6 var(--serif);
   font-feature-settings: "palt";
   color: var(--ink);
   text-decoration: none;
-  transition: color var(--t) var(--ease);
 }
 .now a:hover {
-  color: var(--a);
+  background: color-mix(in srgb, var(--mark) 25%, transparent);
 }
 
 .go {
@@ -727,80 +659,162 @@ h1 {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.6rem 1rem;
-  margin: auto 0 0;
-  padding-top: 1.25rem;
+  margin: 1.3rem 0 0;
 }
-/* The main button: a pill in the site's colour, a little light on its top edge */
+/* The main button: solid ink, square-cut; the second colour on hover */
 .open {
   display: inline-flex;
   align-items: center;
   min-height: 2.75rem;
-  padding: 0 1.3rem;
-  border-radius: var(--r-pill);
-  background: linear-gradient(180deg, rgb(255 255 255 / 9%), rgb(255 255 255 / 0%) 60%)
-    color-mix(in srgb, var(--a) var(--fill), var(--paper));
-  color: var(--on-a);
+  padding: 0 1.15rem;
+  border-radius: var(--r);
+  background: var(--btn);
+  color: var(--on-btn);
   font-weight: 700;
   white-space: nowrap;
   text-decoration: none;
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 16%),
-    0 8px 18px -10px color-mix(in srgb, var(--a) var(--glow), transparent);
-  transition:
-    filter var(--t) var(--ease),
-    box-shadow var(--t) var(--ease);
 }
 .open:hover {
-  filter: brightness(1.07);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 16%),
-    0 12px 22px -10px color-mix(in srgb, var(--a) var(--glow), transparent);
-}
-.open:focus-visible {
-  outline: 2px solid var(--a);
-  outline-offset: 3px;
+  background: var(--mark);
+  color: var(--on-mark);
 }
 .arrow {
-  margin-left: 0.45em;
-  transition: transform var(--t) var(--ease);
-}
-.open:hover .arrow {
-  transform: translateX(3px);
+  margin-left: 0.6em;
 }
 .status {
   font-size: 0.8rem;
   color: var(--soft);
 }
 
+/* On a computer: the title as a vertical spine on the left; each row in three columns
+   (number | name and button | what the site has) with a hairline between the columns */
+@media (min-width: 60rem) {
+  .page {
+    display: grid;
+    grid-template-columns: 5.5rem minmax(0, 1fr);
+    column-gap: 2.5rem;
+  }
+  .page > h1 {
+    position: sticky;
+    top: 1.5rem;
+    align-self: start;
+    margin: 2rem 0 0;
+    padding-right: 1.4rem;
+    border-right: 2px solid var(--ink);
+    writing-mode: vertical-rl;
+    font-size: 3.4rem;
+    line-height: 1;
+    letter-spacing: 0.22em;
+  }
+  /* Latin on its side (like a book's spine) needs no extra spacing */
+  .page > h1:lang(en) {
+    letter-spacing: 0.02em;
+  }
+  .intro {
+    padding: 2rem 0 2.4rem;
+  }
+  .site {
+    grid-template-columns: 4.5rem minmax(0, 0.62fr) minmax(0, 1.38fr);
+    grid-template-rows: repeat(5, auto) 1fr;
+    column-gap: 2rem;
+    padding: 1.8rem 0 2rem;
+  }
+  .no {
+    grid-row: 1 / span 3;
+    font-size: 3.6rem;
+  }
+  .site-name {
+    grid-row: 1 / span 2;
+    align-self: start;
+  }
+  .site h2 {
+    font-size: 1.85rem;
+  }
+  .site > :not(.site-head) {
+    grid-column: 3;
+    margin-top: 0;
+    padding-left: 2rem;
+    border-left: 1px solid var(--rule);
+  }
+  .site > .desc {
+    grid-row: 1;
+  }
+  .site > .tags {
+    grid-row: 2;
+  }
+  .site > .find {
+    grid-row: 3;
+  }
+  .site > .now {
+    grid-row: 4;
+  }
+  .site > .links {
+    grid-row: 5;
+  }
+  /* The column rule runs the whole row: every right-hand part carries it, with no gaps between them */
+  .site > .tags,
+  .site > .find,
+  .site > .now,
+  .site > .links {
+    padding-top: 0.9rem;
+  }
+  .site > .desc,
+  .site > .tags,
+  .site > .find,
+  .site > .now,
+  .site > .links {
+    max-width: none;
+  }
+  .site > .find > input,
+  .site > .now > * {
+    max-width: 30rem;
+  }
+  .site > .links ul {
+    margin-top: 0;
+  }
+  .site > .go {
+    grid-column: 2;
+    grid-row: 3 / span 4;
+    align-self: start;
+    margin-top: 1.1rem;
+    padding-left: 0;
+    border-left: 0;
+  }
+  /* A right-hand column under the last part, so the rule reaches the bottom of the row */
+  .site::after {
+    content: "";
+    grid-column: 3;
+    grid-row: 6;
+    border-left: 1px solid var(--rule);
+  }
+}
+
 footer {
-  margin-top: 2.8rem;
-  padding-top: 1.1rem;
-  border-top: 1px solid color-mix(in srgb, var(--rule) 80%, transparent);
-  font-size: 0.82rem;
+  margin-top: 1.4rem;
+  font-size: 0.8rem;
   color: var(--soft);
 }
 footer p {
   margin: 0.25rem 0;
 }
 .owner {
-  margin-top: 1.4rem;
+  margin-top: 1.6rem;
   padding: 0.9rem 1.1rem;
-  border: 1px solid color-mix(in srgb, var(--rule) 75%, transparent);
-  border-radius: var(--r-m);
-  background: var(--surface);
-  box-shadow: inset 0 1px 0 var(--line-hi);
+  border: 1px solid var(--ink);
+  border-radius: var(--r);
+  background: var(--card);
 }
 .owner h2 {
-  margin: 0 0 0.25rem;
-  font-size: 0.85rem;
+  margin: 0 0 0.3rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
   color: var(--ink);
 }
 .owner code {
   padding: 0.05rem 0.3rem;
   font: 0.8rem var(--mono);
   word-break: break-all;
-  background: color-mix(in srgb, var(--ink) 6%, transparent);
-  border-radius: 4px;
+  background: var(--paper);
 }
 .problems {
   margin: 0.2rem 0 0.5rem;
@@ -813,6 +827,7 @@ footer p {
   margin: 0.4rem 0 0.2rem;
   border-collapse: collapse;
   font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
 }
 .running caption {
   text-align: left;
@@ -836,9 +851,7 @@ footer p {
 .left-note {
   margin: 0.4rem 0 0.6rem;
   padding: 0.5rem 0.8rem;
-  border-left: 3px solid var(--warn);
-  border-radius: 0 var(--r-s) var(--r-s) 0;
-  background: color-mix(in srgb, var(--warn) 6%, transparent);
+  border-left: 4px solid var(--mark);
 }
 .left-note p {
   margin: 0.25rem 0;
@@ -849,35 +862,47 @@ footer p {
 .left-note .copy {
   display: block;
   padding: 0.4rem 0.5rem;
-  background: var(--field);
+  background: var(--paper);
   border: 1px solid var(--rule);
-  border-radius: 6px;
   font: 0.78rem/1.5 var(--mono);
   overflow-wrap: anywhere;
   user-select: all;
 }
 
-/* 404 and the owner's login: one sheet in the middle of the wash */
+/* 404 and the owner's login: one ruled sheet, halftone in the corner */
 .missing {
-  --a: var(--accent);
+  --a: var(--link);
+  position: relative;
+}
+.missing::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: -1;
+  width: min(60vw, 30rem);
+  height: 18rem;
+  background: radial-gradient(circle, var(--mark) 1.4px, transparent 1.9px) 0 0 / 11px 11px;
+  opacity: var(--dots);
+  -webkit-mask-image: radial-gradient(ellipse at 100% 0%, #000 15%, transparent 70%);
+  mask-image: radial-gradient(ellipse at 100% 0%, #000 15%, transparent 70%);
+  pointer-events: none;
 }
 .missing main {
-  max-width: 36rem;
-  margin: 12vh auto 0;
-  padding: 1.8rem 1.8rem 1.4rem;
-  background: var(--surface);
-  border: 1px solid color-mix(in srgb, var(--rule) 75%, transparent);
-  border-radius: var(--r-l);
-  box-shadow:
-    inset 0 1px 0 var(--line-hi),
-    var(--shadow-1);
+  max-width: 38rem;
+  margin: 14vh auto 0;
+  padding-top: 1rem;
+  border-top: 2px solid var(--ink);
 }
 .missing h1 {
-  margin-bottom: 0.4rem;
-  font-size: clamp(1.8rem, 1.4rem + 1.6vw, 2.3rem);
+  margin: 0.4rem 0 0.6rem;
+  font-size: clamp(1.9rem, 1.4rem + 1.8vw, 2.6rem);
+}
+.missing .lead {
+  color: var(--soft);
 }
 .missing .go {
-  padding-top: 0.6rem;
+  margin-top: 1.4rem;
 }
 .back {
   display: inline-flex;
@@ -886,6 +911,10 @@ footer p {
   padding: 0 0.4rem;
   color: var(--ink);
   font-weight: 600;
+}
+.back:hover {
+  text-decoration-color: var(--mark);
+  text-decoration-thickness: 0.18em;
 }
 .arrow-back {
   margin-right: 0.45em;
@@ -903,17 +932,12 @@ footer p {
 }
 .signin input {
   min-height: 2.75rem;
-  padding: 0 0.85rem;
-  border: 1px solid var(--rule);
-  border-radius: var(--r-s);
-  background: var(--field);
+  padding: 0 0.8rem;
+  border: 1px solid var(--ink);
+  border-radius: var(--r);
+  background: var(--card);
   color: var(--ink);
   font: inherit;
-}
-.signin input:focus-visible {
-  outline: 2px solid transparent;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 24%, transparent);
 }
 .signin .open {
   justify-self: start;
@@ -932,45 +956,39 @@ button.open {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation: none !important;
+  * {
     transition: none !important;
-  }
-  .site:hover {
-    transform: none;
   }
 }
 
-/* The narrowest phones (360px): the date stays on one line */
-@media (max-width: 24rem) {
-  .date {
-    letter-spacing: 0.02em;
-  }
-  .date::before {
-    display: none;
-  }
-}
 @media (max-width: 30rem) {
   body {
-    padding-top: 1.5rem;
+    padding: 0 1rem 2rem;
   }
-  header {
-    padding-bottom: 1.4rem;
+  .page::before {
+    width: 70vw;
+    height: 9rem;
   }
-  .site {
-    padding: 1.1rem 1.1rem 1rem;
+  h1 {
+    margin-top: 1.5rem;
   }
   .site h2 {
-    font-size: 1.3rem;
+    font-size: 1.4rem;
   }
   .open {
     flex: 1;
     justify-content: center;
   }
   .missing main {
-    margin-top: 6vh;
-    padding: 1.3rem 1.2rem 1rem;
+    margin-top: 8vh;
+  }
+}
+/* The narrowest phones (360px): the date stays on one line */
+@media (max-width: 24rem) {
+  .date {
+    letter-spacing: 0.04em;
+  }
+  .date::before {
+    display: none;
   }
 }
