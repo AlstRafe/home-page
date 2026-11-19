@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import gzip
+import json
 import os
 import re
 import shutil
@@ -337,8 +338,8 @@ name = "Gone"
         self.assertIn("3 番目のサイト: accent は", page)
         self.assertIn("4 番目のサイト:", page)
         self.assertNotIn("/gone/", page)
-        self.assertIn("このPCの持ち主向け", page)
-        self.assertNotIn("このPCの持ち主向け", call(self.portal, "/", host=PUBLIC)[2])
+        self.assertIn("<h2>持ち主向け</h2>", page)
+        self.assertNotIn("持ち主向け", call(self.portal, "/", host=PUBLIC)[2])
         self.write("title = [broken")
         page = call(self.portal, "/")[2]
         self.assertIn("sites.toml を読めませんでした", page)
@@ -383,7 +384,7 @@ name = "Gone"
         self.assertEqual(call(self.portal, "/relay/v1/ping", method="POST")[2], "news  /relay/v1/ping POST")
         self.assertEqual(call(self.portal, "/api/saved", method="POST")[2], "news  /api/saved POST")
         robots = call(self.portal, "/robots.txt")[2]
-        self.assertEqual(robots, "User-agent: *\nDisallow: /news/api/\nDisallow: /relay/\n")
+        self.assertEqual(robots, "User-agent: *\nDisallow: /search\nDisallow: /news/api/\nDisallow: /relay/\n")
 
     def test_an_app_missing_from_sites_toml_is_still_served_and_one_not_provided_is_left_out(self):
         self.write('[[site]]\nmount = "/infra"\nfolder = "Infra Game"\nname = "CoreLab"\n')
@@ -628,6 +629,131 @@ name = "Gone"
         problems = [p for p in portal.problems if "index.html がありません" not in p]
         self.assertEqual(problems, [])
         self.assertEqual(portal.sites[0].mount, "/news")
+
+    def search_and_links(self, links_ko='["오늘의 요약", "목록"]') -> None:
+        self.write(f"""
+[[site]]
+app = "news"
+search = "/?q={{q}}"
+search_hint = "記事を検索"
+links = [["今日のまとめ", "/digest"], ["読み比べ一覧", "/stories"]]
+
+[site.ko]
+search_hint = "기사 검색"
+links = {links_ko}
+
+[[site]]
+mount = "/infra"
+folder = "Infra Game"
+name = "CoreLab"
+search = "/#/ref?q={{q}}"
+public = false
+""")
+
+    def test_a_cards_search_box_goes_on_to_the_sites_own_search(self):
+        self.search_and_links()
+        status, headers, page = call(self.portal, "/")
+        self.assertIn('<form class="find" action="/search" method="get" role="search">', page)
+        self.assertIn('<input type="hidden" name="site" value="/news">', page)
+        self.assertIn('placeholder="記事を検索"', page)
+        self.assertIn('placeholder="CoreLab の中を検索"', page)  # no hint: the site's name
+        self.assertIn("form-action 'self'", headers["Content-Security-Policy"])  # the box may send itself
+        self.assertIn('placeholder="기사 검색"', call(self.portal, "/", HTTP_COOKIE="lang=ko")[2])
+
+        def where(query: str, **headers) -> tuple[int, str]:
+            status, answer, _ = call(self.portal, "/search?" + query, **headers)
+            return status, answer.get("Location", "")
+
+        # The words, any letters, quoted for the address; a # in a Riot ID or a page's own #... both work.
+        self.assertEqual(
+            where("site=/news&q=%E5%8F%B0%E9%A2%A8+%E6%8E%A5%E8%BF%91"),
+            (302, "/news/?q=%E5%8F%B0%E9%A2%A8%20%E6%8E%A5%E8%BF%91"),
+        )
+        self.assertEqual(where("site=/news&q=Name%23JP1"), (302, "/news/?q=Name%23JP1"))
+        self.assertEqual(where("site=/infra&q=kubectl+get+pods"), (302, "/infra/#/ref?q=kubectl%20get%20pods"))
+        self.assertEqual(where("site=/news&q=++"), (302, "/news/"))  # nothing to look for: the site's top
+        self.assertEqual(where("site=/news&q=" + "a" * 500)[1], "/news/?q=" + "a" * homepage.SEARCH_CHARACTERS)
+        self.assertEqual(where("site=/nowhere&q=x")[0], 404)
+        self.assertEqual(where("q=x")[0], 404)
+        self.assertEqual(where("site=/infra&q=x", HTTP_HOST=PUBLIC)[0], 404)  # a site kept from the public
+        self.assertEqual(where("site=/news&q=x", HTTP_HOST=PUBLIC), (302, "/news/?q=x"))
+        self.assertIn("Disallow: /search\n", call(self.portal, "/robots.txt")[2])
+
+    def test_a_cards_shortcuts_in_the_visitors_language(self):
+        self.search_and_links()
+        page = call(self.portal, "/")[2]
+        self.assertIn('<nav class="links" aria-label="NewsBridge: よく使うページ">', page)
+        self.assertIn(
+            '<li><a href="/news/digest">今日のまとめ</a></li><li><a href="/news/stories">読み比べ一覧</a></li>', page
+        )
+        korean = call(self.portal, "/", HTTP_COOKIE="lang=ko")[2]
+        self.assertIn('<a href="/news/digest">오늘의 요약</a>', korean)
+        self.assertIn('<a href="/news/stories">목록</a>', korean)
+        self.assertIn('<a href="/news/digest">今日のまとめ</a>', call(self.portal, "/", HTTP_COOKIE="lang=en-GB")[2])
+
+    def test_mistakes_in_search_and_shortcuts_are_explained_to_the_owner(self):
+        self.search_and_links(links_ko='["하나"]')
+        self.assertIn("[ko] の links は、links と同じ数の名前を同じ順に並べます（2 個）", call(self.portal, "/")[2])
+        for wrong in ('search = "/?q="', 'search = "https://example.com/?q={q}"', 'search = "/a b?q={q}"'):
+            self.write(f'[[site]]\nmount = "/infra"\nfolder = "Infra Game"\nname = "CoreLab"\n{wrong}\n')
+            self.assertIn("search はサイトの中のアドレス", call(self.portal, "/")[2], wrong)
+        for wrong in ('links = [["使い方"]]', 'links = [["使い方", "help"]]', 'links = "/help"'):
+            self.write(f'[[site]]\nmount = "/infra"\nfolder = "Infra Game"\nname = "CoreLab"\n{wrong}\n')
+            self.assertIn("links は", call(self.portal, "/")[2], wrong)
+
+    def test_which_commit_of_each_site_is_live(self):
+        def commit(folder: Path, sha: str) -> None:
+            (folder / ".git" / "refs" / "heads").mkdir(parents=True, exist_ok=True)
+            (folder / ".git" / "HEAD").write_text("ref: refs/heads/master\n", encoding="utf-8")
+            (folder / ".git" / "refs" / "heads" / "master").write_text(sha + "\n", encoding="utf-8")
+
+        commit(self.game, "a" * 40)
+        status, headers, body = call(self.portal, "/version.json")
+        self.assertEqual(
+            (status, headers["Content-Type"], headers["Cache-Control"]), (200, "application/json", "no-store")
+        )
+        found = json.loads(body)
+        self.assertEqual(found["versions"]["/infra"], "a" * 40)  # a folder site: as it is on disk, at once
+        self.assertEqual(found["versions"]["/news"], "")  # no folder known (the server gives it)
+        self.assertRegex(found["versions"]["/"], "^([0-9a-f]{40})?$")  # this repository (a clone in CI)
+        self.assertTrue(found["started"].endswith("+09:00"))
+        commit(self.game, "b" * 40)
+        self.assertEqual(json.loads(call(self.portal, "/version.json")[2])["versions"]["/infra"], "b" * 40)
+        # New Home Page code counts once the server restarted into it.
+        self.portal.commit = ("c" * 40, None)
+        self.portal.restart_pending = lambda: True
+        self.assertEqual(json.loads(call(self.portal, "/version.json")[2])["versions"]["/"], "c" * 40)
+        # The owner sees the same, with when each arrived and the machine; a visitor never sees a hidden site.
+        page = call(self.portal, "/")[2]
+        self.assertIn('<th scope="row">CoreLab</th><td><code>bbbbbbb</code></td>', page)
+        self.assertIn("新しいコードで再起動待ち", page)
+        self.write('[[site]]\nmount = "/infra"\nfolder = "Infra Game"\nname = "CoreLab"\npublic = false\n')
+        self.assertNotIn("/infra", json.loads(call(self.portal, "/version.json", host=PUBLIC)[2])["versions"])
+        self.assertIn("/infra", json.loads(call(self.portal, "/version.json")[2])["versions"])
+
+    def test_the_owners_box_is_in_the_owners_language_too(self):
+        page = call(self.portal, "/", HTTP_COOKIE="lang=en-GB")[2]
+        self.assertIn("<h2>For the owner</h2>", page)
+        self.assertIn("Visitors never see this box.", page)
+        self.assertNotIn("このPC", page)
+
+    def test_the_list_can_be_put_on_a_phones_home_screen(self):
+        page = call(self.portal, "/")[2]
+        self.assertIn('<link rel="manifest" href="/portal.webmanifest">', page)
+        status, headers, body = call(self.portal, "/portal.webmanifest", HTTP_COOKIE="lang=zh-TW")
+        self.assertEqual((status, headers["Content-Type"]), (200, "application/manifest+json"))
+        self.assertIn("Cookie", headers["Vary"])
+        manifest = json.loads(body)
+        self.assertEqual((manifest["lang"], manifest["short_name"], manifest["start_url"]), ("zh-TW", "網站列表", "/"))
+        self.assertEqual(manifest["name"], "サイト一覧")  # sites.toml has no [zh-TW] title in this test
+        self.assertEqual([icon["purpose"] for icon in manifest["icons"]], ["any", "any", "maskable"])
+        for icon in manifest["icons"]:
+            status, headers, picture = call(self.portal, icon["src"], raw=True)
+            self.assertEqual((status, headers["Content-Type"]), (200, "image/png"), icon["src"])
+            self.assertEqual(headers["Cache-Control"], homepage.web.IMMUTABLE)  # asked for at its version
+            width, height = int.from_bytes(picture[16:20], "big"), int.from_bytes(picture[20:24], "big")
+            self.assertEqual(f"{width}x{height}", icon["sizes"], icon["src"])
+        self.assertIn("manifest-src 'self'", call(self.portal, "/")[1]["Content-Security-Policy"])
 
 
 if __name__ == "__main__":

@@ -25,12 +25,12 @@ jobs:
   check:
     name: Public pages
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
-      - name: Give the VM time to take the push (it pulls master every minute, then restarts)
-        if: github.event_name == 'push'
-        run: sleep 150
-      - run: python3 -u deploy/livecheck.py ${URL:+"$URL"}
+      # After a push it first waits until /version.json says the pushed commit is live (the VM pulls
+      # master every minute, then restarts into new code), then checks the pages as they are now.
+      - run: python3 -u deploy/livecheck.py ${URL:+"$URL"} ${EXPECT:+--expect "$EXPECT"}
         env:
           URL: ${{ inputs.url }}
+          EXPECT: ${{ github.event_name == 'push' && github.sha || '' }}

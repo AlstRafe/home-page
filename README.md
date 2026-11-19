@@ -12,10 +12,16 @@ sites.toml            サーバー設定（[server]）と、一覧に並べる�
 launcher.py           起動役: 仮想環境の準備、ログオン時の自動起動、サーバーの見張りと再起動
 start.bat             launcher.py をダブルクリックで動かす
 homepage/server.py    サーバー本体（waitress）: 待ち受け、ホスト名の確認、テスト公開の https/noindex、自動再起動
-homepage/__init__.py  ポータル（WSGI）: 振り分け、一覧ページ、静的サイトの配信、ダーク/ライトの切り替え（THEME_SCRIPT。localStorage "theme" は News Site・CoreLab と共通）
+homepage/__init__.py  ポータル（WSGI）: 振り分け、sites.toml、一覧ページ、カードの検索（/search）、/version.json、/portal.webmanifest
+homepage/static.py    フォルダのサイトの配信（ETag・gzip・?v= の版・戻るリンク・og:image の補完）
+homepage/pages.py     ポータル自身の小さなページ（404・持ち主のログイン）と、ダーク/ライト（THEME_SCRIPT。localStorage "theme" は全サイト共通）
+homepage/web.py       答え方の共通部品（セキュリティヘッダ、転送、アドレス、パッケージのファイル）
+homepage/status.py    動いている版（各リポジトリの .git を直接読む）と、VM の負荷・メモリ・ディスク
+homepage/owner.py     持ち主のログイン（/owner）: パスワード、署名つきクッキー、試行回数の制限
 homepage/i18n.py      言語（日本語・한국어・English (UK)・中文（台灣））: 訪問者の選択、ブラウザの言語、言語メニュー、ページの文言
 homepage/page.html    一覧ページのひな形 / portal.css 見た目 / icons/*.svg アイコン / favicon.svg
 homepage/og.png       リンクを貼ったときのプレビュー画像（1200×630）/ apple-touch-icon.png ホーム画面のアイコン（180×180）
+homepage/icon-*.png   ホーム画面に追加したときのアプリのアイコン（192・512・maskable。favicon.svg から作った）
 homepage/__main__.py  python -m homepage --demo: 一覧の見た目だけを試す小さなサーバー
 tests/                python -m unittest discover -s tests
 deploy/               クラウドの VM で配信する: 準備（setup.sh）、GitHub からの自動反映（update.sh）、PC からの移行（migrate.py）
@@ -74,6 +80,8 @@ name = "Memo"
 - `preview = "portal.json"` で、サイトのフォルダにある JSON の中身をカードに並べる（`{"title": "見出し", "items": [["文", "/サイト内のパス"], ...]}`、最大 5 件、サイト内のパスだけ）。JSON を書き換えると一覧に即反映。CoreLab は「すぐ遊べるミッション」を Infra Game 側の portal.json で持つ
 - 「← サイト一覧」へ戻るリンクは、サイトが自前で持っていなければポータルが各 HTML の左下に自動で付ける（自前で持つなら `home_link = "own"`）
 - HTML の `og:image`・`og:url` は相対で書いてよい（`content="og.png"`）。リンクのプレビューには完全なアドレスが要るので、ポータルが訪問者の使ったアドレスで補う（CoreLab の og.png）
+- `search = "/search?q={q}"` でカードに検索欄が付く。入れた言葉を `{q}` に入れて、サイト内のそのアドレスへ送る（ポータルの `/search?site=/val&q=…` が転送するので、CoreLab の `/#/ref?q={q}` のような `#` の中も可）。薄い文字は `search_hint`
+- `links = [["ランキング", "/leaderboard"], ...]` でカードに「よく使うページ」が並ぶ。ほかの言語は `[site.ko]` などに `links = ["리더보드", ...]`（文だけを同じ順に）
 - `public = false` でテスト公開（Funnel）の名前からは隠す。このPC・LAN からは見えるので、公開前の確認に使える
 - 書き間違いや読み込めなかったサイトは、このPCから一覧を開いたときだけページ下の「このPCの持ち主向け」欄に理由が出る
 - Python の Web アプリは `python = "フォルダ"` と `entry = "モジュール:関数"` で足す。関数は `site(mount=..., host={...})` で `{"app": WSGIアプリ, "name", "subtitle", "preview", "disallow", "legacy", "version"}` を返す（homepage/server.py の説明、News Site の newsreader/hosting.py が実例）
@@ -85,6 +93,15 @@ python -m homepage --demo
 ```
 
 → http://127.0.0.1:5055/
+
+## 動いている版と VM の状態
+
+- `/version.json` は、いま公開中の各サイトのコミット（`"/"` が Home Page）とサーバーの起動時刻を返す。
+  Home Page の新しい .py は再起動してから、ページ・CSS・sites.toml・フォルダのサイトはすぐに数える
+- Live site（`.github/workflows/live.yml`）は master への push のあと、`deploy/livecheck.py --expect <コミット>` で
+  その版が出るのを待ってから（最大 8 分）ページを確かめる。ほかのリポジトリでも `--site /val` で同じように待てる
+- 一覧の下の持ち主向けの欄に、各サイトの版と届いた時刻、再起動待ちかどうか、VM の負荷・メモリ・スワップ・ディスクが出る（訪問者には出ない）
+- 一覧はスマホのホーム画面にアプリとして追加できる（`/portal.webmanifest`。iPhone は apple-touch-icon）
 
 ## 言語
 

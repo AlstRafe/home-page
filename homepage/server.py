@@ -361,6 +361,7 @@ def load_python_sites(entries: list, base: Path, host: dict) -> tuple[list[App],
                 disallow=tuple(made.get("disallow") or ()),
                 legacy=tuple(legacy) if legacy is not None else None,
                 version=made.get("version"),
+                folder=folder,
             )
         )
     return apps, notes
@@ -498,7 +499,8 @@ def main(argv: list[str] | None = None) -> int:
     portal.warm()
     started = {"code": code_stamp(), "settings": settings_stamp(config), **{app.mount: _version(app) for app in apps}}
 
-    def reason(rounds: int) -> str | None:
+    def changed() -> str | None:
+        """Why the code that runs is not the code there is now, or None."""
         if code_stamp() != started["code"]:
             return "Home Page のコードが変わりました"
         stamp = settings_stamp(config)
@@ -508,6 +510,14 @@ def main(argv: list[str] | None = None) -> int:
             now = _version(app)
             if now and now != started[app.mount]:
                 return f"{app.name} が更新されました（{now}）"
+        return None
+
+    portal.restart_pending = lambda: changed() is not None
+
+    def reason(rounds: int) -> str | None:
+        why = changed()
+        if why:
+            return why
         if settings.listen == "network" and rounds % NETWORK_POLL_ROUNDS == 0:
             new = next(
                 (item for item in addresses(settings) if item not in hosts and _bindable(item, settings.port)), None

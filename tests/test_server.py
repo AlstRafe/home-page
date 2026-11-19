@@ -113,6 +113,7 @@ entry = "nothing:site"
             (shop.key, shop.name, shop.subtitle, shop.disallow, shop.version()),
             ("/shop", "Shop", "a shop", ("/api/",), "v1"),
         )
+        self.assertEqual(shop.folder, (self.tmp / "Shop").resolve())  # its commit is read from there
         self.assertEqual(len(notes), 2)
         self.assertIn("no database", notes[0])
         self.assertIn("Nowhere", notes[1])
@@ -123,7 +124,7 @@ entry = "nothing:site"
         self.assertIn('href="/shop/today">today</a>', page)
         self.assertIn("/broken を読み込めませんでした", page)
         self.assertEqual(call(portal, "/shop/a")[2], "/shop /a")
-        self.assertEqual(call(portal, "/robots.txt")[2], "User-agent: *\nDisallow: /shop/api/\n")
+        self.assertEqual(call(portal, "/robots.txt")[2], "User-agent: *\nDisallow: /search\nDisallow: /shop/api/\n")
 
     def test_names_and_the_public_name(self):
         names = server.Hosts(["100.70.1.2", "haruxera.tail1234.ts.net", "HARUXERA", None])

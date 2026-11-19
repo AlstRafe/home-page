@@ -131,7 +131,7 @@ html {
 }
 body {
   margin: 0 auto;
-  max-width: 62rem;
+  max-width: 75rem;
   padding: 3rem 1rem 2.5rem;
   font: 16px/1.75 var(--sans);
   background: var(--paper);
@@ -334,7 +334,8 @@ h1 {
   padding: 0;
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  /* Three side by side on a computer (1024px and up), one under the other on a phone */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 19.5rem), 1fr));
 }
 .site {
   display: flex;
@@ -415,6 +416,101 @@ h1 {
   line-height: 1.7;
   border: 1px solid var(--rule);
   border-radius: 999px;
+}
+
+/* The card's search box: on to the site's own search (/search?site=...) */
+.find {
+  display: flex;
+  gap: 0.4rem;
+  margin: 1rem 0 0;
+}
+.find input {
+  flex: 1;
+  min-width: 0;
+  min-height: 2.6rem;
+  padding: 0 0.8rem;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.93rem;
+}
+.find input::placeholder {
+  color: var(--soft);
+  opacity: 1;
+}
+.find input:focus-visible {
+  outline: 2px solid var(--a);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+.find button {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  min-height: 2.6rem;
+  padding: 0;
+  border: 1px solid var(--a);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--a);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.find svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+/* The button shows the magnifier; its word is for screen readers */
+.find .words {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.find button:hover {
+  background: color-mix(in srgb, var(--a) 10%, transparent);
+}
+.find button:focus-visible {
+  outline: 2px solid var(--a);
+  outline-offset: 2px;
+}
+
+/* The card's shortcuts (sites.toml links) */
+.links ul {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 1.1rem;
+  margin: 0.9rem 0 0;
+  padding: 0;
+  font-size: 0.88rem;
+}
+.links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  color: var(--a);
+  font-weight: 600;
+  text-decoration: none;
+}
+.links a::after {
+  content: "›";
+  margin-left: 0.3em;
+}
+.links a:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
 }
 
 .now {
@@ -522,6 +618,30 @@ footer p {
   padding-left: 1.2rem;
   color: var(--warn);
   font-weight: 600;
+}
+/* What runs (each site's commit and when it arrived) and how the machine is doing */
+.running {
+  margin: 0.4rem 0 0.2rem;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+.running caption {
+  text-align: left;
+  font-weight: 600;
+  color: var(--ink);
+}
+.running th,
+.running td {
+  padding: 0.1rem 1rem 0.1rem 0;
+  text-align: left;
+  font-weight: 400;
+}
+.running code {
+  background: none;
+  padding: 0;
+}
+.machine {
+  font-size: 0.8rem;
 }
 /* A note the deploy scripts left (the VM's deploy key): the key is selected whole with one tap. */
 .left-note {

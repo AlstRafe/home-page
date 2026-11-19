@@ -20,6 +20,7 @@ sys.path.insert(0, str(ROOT / "deploy"))
 import backup
 import import_news_data
 import keepalive
+import livecheck
 import migrate
 
 PC_ARTICLES = r"C:\Users\someone\Documents\Claude\News Site\work\app\articles"
@@ -181,6 +182,32 @@ class KeepaliveTest(unittest.TestCase):
         self.assertEqual(keepalive.work_seconds(at(0, 30), keepalive.hours("23-1")), 1800)
         self.assertEqual(keepalive.hours(""), set())  # never
         self.assertEqual(keepalive.hours("night"), set())
+
+
+class LivecheckTest(unittest.TestCase):
+    def answers(self, *bodies):
+        """fetch() answering /version.json with these bodies in turn (None: the VM does not answer)."""
+        said = iter(bodies)
+
+        def fetch(url):
+            body = next(said)
+            if body is None:
+                raise ConnectionError(url)
+            return (200, {}, json.dumps(body).encode(), 0.1) if isinstance(body, dict) else (404, {}, b"", 0.1)
+
+        return mock.patch.object(livecheck, "fetch", fetch)
+
+    def test_after_a_push_it_waits_until_the_pushed_commit_is_live(self):
+        old, new = {"versions": {"/": "a" * 40, "/val": "c" * 40}}, {"versions": {"/": "b" * 40}}
+        # before this code was deployed (404), during the restart (no answer), the old code, then the new
+        with self.answers("missing", None, old, new), mock.patch("sys.stdout", io.StringIO()) as out:
+            self.assertEqual(livecheck.wait_for("https://x", "b" * 40, step=0), [])
+        self.assertIn("反映を確認: / は bbbbbbb", out.getvalue())
+        with self.answers(old), mock.patch("sys.stdout", io.StringIO()):
+            self.assertEqual(livecheck.wait_for("https://x", "c" * 40, "/val", step=0), [])
+        with self.answers(old, old), mock.patch("sys.stdout", io.StringIO()):
+            problems = livecheck.wait_for("https://x", "b" * 40, limit=0, step=0)
+        self.assertEqual(problems, ["/: bbbbbbb が 0 分たっても反映されません（いま aaaaaaa）"])
 
 
 if __name__ == "__main__":
