@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <meta name="format-detection" content="telephone=no">
-<meta name="theme-color" content="#f5f3ef" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#141413" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#edf0f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141822" media="(prefers-color-scheme: dark)">
 <script>{{ theme_script }}</script>
 <title>{{ title }}</title>
 <meta name="description" content="{{ description }}">
@@ -26,12 +26,16 @@
 <link rel="stylesheet" href="{{ css }}">
 </head>
 <body>
-<header>
-<div class="bar"><p class="date">{{ date }}</p><div class="tools">{{ theme }}{{ menu }}</div></div>
+<header class="top">
+<p class="date">{{ date }}</p><div class="tools">{{ theme }}{{ menu }}</div>
+</header>
+<div class="page">
 <h1>{{ title }}</h1>
+<div class="body">
+<div class="intro">
 {{ lead }}
 {{ points }}
-</header>
+</div>
 <main>
 <ol class="sites">
 {{ sites }}
@@ -42,5 +46,7 @@
 <p class="count">{{ count }}</p>
 {{ owner }}
 </footer>
+</div>
+</div>
 </body>
 </html>

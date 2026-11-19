@@ -61,7 +61,7 @@ MOUNT = re.compile(r"/[a-z0-9][a-z0-9-]*")
 WORD = re.compile(r"[a-z0-9-]+")
 #: A card's search address in its site (``search = "/search?q={q}"``): printable ASCII, the words go in {q}.
 SEARCH = re.compile(r"/[!#$%&'()*+,\-./0-9:;=?@A-Z\[\]_a-z{}~]*")
-ACCENTS = ("red", "blue", "teal", "green", "amber", "purple", "gray")
+ACCENTS = ("red", "orange", "blue", "teal", "green", "amber", "purple", "gray")
 #: What a language table may say (sites.toml ``[ko]`` and so on, and ``[site.ko]`` under a site).
 PAGE_TEXTS = ("title", "lead", "points", "about")
 SITE_TEXTS = ("name", "subtitle", "description", "tags", "open", "search_hint", "links")
@@ -101,7 +101,7 @@ PREVIEW_SECONDS = 60.0
 #: The words a card's search box sends at most.
 SEARCH_CHARACTERS = 200
 #: The page colour (portal.css --paper), for the phone's bar and the app's splash screen.
-PAPER = "#f5f3ef"
+PAPER = "#edf0f2"
 
 
 @dataclass
