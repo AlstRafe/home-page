@@ -109,7 +109,7 @@ subtitle = "インフラ運用トレーニングゲーム"
 description = "Kubernetes・Docker・Harbor・OpenShift・AWS のよくある障害を、ブラウザの中のターミナルで解決しながら学べます。分野別の学習問題 333 問（資格 60 試験の対策つき）とコマンド辞典も。操作はすべて架空データのシミュレーションです。"
 icon = "terminal"
 accent = "teal"
-tags = ["インストール不要", "Linux 基礎から 19 ミッション", "架空データで安全"]
+tags = ["インストール不要", "Linux 基礎から 25 ミッション", "架空データで安全"]
 home_link = "own"
 preview = "portal.json" # 「すぐ遊べるミッション」（Infra Game 側で管理）
 search = "/#/ref?q={q}" # コマンド辞典
@@ -119,21 +119,21 @@ links = [["ラーニング", "/#/learn"], ["コマンド辞典", "/#/ref"], ["�
 [site.ko]
 subtitle = "인프라 운영 트레이닝 게임"
 description = "Kubernetes, Docker, Harbor, OpenShift, AWS에서 흔히 일어나는 장애를 브라우저 속 터미널로 해결하며 배웁니다. 분야별 학습 문제 333문항(자격증 60종 대비)과 명령어 사전도 있습니다. 모든 조작은 가상 데이터로 하는 시뮬레이션입니다."
-tags = ["설치 불필요", "Linux 기초부터 19개 미션", "가상 데이터라 안전"]
+tags = ["설치 불필요", "Linux 기초부터 25개 미션", "가상 데이터라 안전"]
 search_hint = "명령어 검색 (예: kubectl)"
 links = ["학습", "명령어 사전", "프리 랩"]
 
 [site.en-GB]
 subtitle = "Infrastructure operations training game"
 description = "Learn by fixing common Kubernetes, Docker, Harbor, OpenShift and AWS failures in a terminal inside your browser. Also 333 practice questions by subject (covering 60 certifications) and a command reference. Everything is a simulation with fictional data."
-tags = ["Nothing to install", "19 missions from Linux basics up", "Safe: all data is fictional"]
+tags = ["Nothing to install", "25 missions from Linux basics up", "Safe: all data is fictional"]
 search_hint = "Search commands (e.g. kubectl)"
 links = ["Learning", "Command reference", "Free lab"]
 
 [site.zh-TW]
 subtitle = "基礎架構維運訓練遊戲"
 description = "在瀏覽器裡的終端機排除 Kubernetes、Docker、Harbor、OpenShift、AWS 的常見故障，邊做邊學。另有 333 題分領域練習題（涵蓋 60 項認證考試）與指令辭典。所有操作都是使用虛構資料的模擬。"
-tags = ["免安裝", "從 Linux 基礎開始的 19 個任務", "虛構資料，安全無虞"]
+tags = ["免安裝", "從 Linux 基礎開始的 25 個任務", "虛構資料，安全無虞"]
 search_hint = "搜尋指令（例：kubectl）"
 links = ["學習", "指令辭典", "自由實驗室"]
 
