@@ -101,7 +101,7 @@ PREVIEW_SECONDS = 60.0
 #: The words a card's search box sends at most.
 SEARCH_CHARACTERS = 200
 #: The page colour (portal.css --paper), for the phone's bar and the app's splash screen.
-PAPER = "#f6f4ef"
+PAPER = "#f5f3ef"
 
 
 @dataclass
