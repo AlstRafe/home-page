@@ -128,9 +128,10 @@ home_link = "own"
         self.assertIn("<span>NewsBridge</span></h2>", page)
         self.assertIn("<span>CoreLab</span></h2>", page)
         self.assertLess(page.index("/news/"), page.index("/infra/"))
-        self.assertIn('<p class="headline">翻訳して読み比べるニュース</p>', page)  # no headline: the app's own subtitle
+        # no headline: the app's own subtitle
+        self.assertIn('<p class="headline">翻訳して<wbr>読み<wbr>比べる<wbr>ニュース</p>', page)
         self.assertIn('<li><a href="#news">NewsBridge</a></li><li><a href="#infra">CoreLab</a></li>', page)  # the nav
-        self.assertIn('href="/news/stories/a">台風が接近</a>', page)
+        self.assertIn('href="/news/stories/a">台風が<wbr>接近</a>', page)
         self.assertIn("取得 5分前", page)
         self.assertIn('<a class="open" href="/infra/">CoreLab を開く', page)
         self.assertIn("<li>登録不要</li>", page)
@@ -305,9 +306,9 @@ name = "Memo"
             )
         )
         page = call(self.portal, "/")[2]
-        self.assertIn('<p class="now-head">すぐ遊べるミッション<span>更新 ', page)
-        self.assertIn('<a href="/infra/#/play/basics-01">初日の当番</a>', page)
-        self.assertIn('<a href="/infra/#/play/docker-01">はじめてのコンテナ</a>', page)
+        self.assertIn('<p class="now-head">すぐ<wbr>遊べる<wbr>ミッション<span>更新 ', page)
+        self.assertIn('<a href="/infra/#/play/basics-01">初日の<wbr>当番</a>', page)
+        self.assertIn('<a href="/infra/#/play/docker-01">はじめての<wbr>コンテナ</a>', page)
         self.assertNotIn("example.com", page)  # only paths of the site itself
         (self.game / "portal.json").write_text("{broken", encoding="utf-8")
         later = time.time() + 5
@@ -475,7 +476,9 @@ name = "Gone"
         self.assertIn('<a href="?lang=ko" lang="ko" hreflang="ko" aria-current="true">한국어</a>', page)
         self.assertIn('<a href="?lang=en-GB" lang="en-GB" hreflang="en-GB">English (UK)</a>', page)
         self.assertIn("Cookie", headers["Vary"])
-        self.assertIn('<p class="headline">翻訳して読み比べるニュース</p>', page)  # no [site.ko] for News: its own
+        self.assertIn(
+            '<p class="headline">翻訳して<wbr>読み<wbr>比べる<wbr>ニュース</p>', page
+        )  # no [site.ko] for News: its own
         english = call(self.portal, "/", HTTP_ACCEPT_LANGUAGE="en-US,en;q=0.9,ja;q=0.5")[2]
         self.assertIn('<html lang="en-GB">', english)
         self.assertIn("Open CoreLab", english)
@@ -531,7 +534,7 @@ name = "Gone"
         )
         korean = call(self.portal, "/", HTTP_COOKIE="lang=ko")[2]
         self.assertIn(">첫날 당번</a>", korean)
-        self.assertIn('<p class="now-head">すぐ遊べるミッション<span>업데이트 ', korean)
+        self.assertIn('<p class="now-head">すぐ<wbr>遊べる<wbr>ミッション<span>업데이트 ', korean)
         self.write(
             self.config.read_text(encoding="utf-8") + '\n[[site]]\nmount = "/memo"\nfolder = "Memo"\nname = "Memo"\n'
         )
@@ -572,7 +575,8 @@ name = "Gone"
         alone = homepage.build([], config=self.config)
         status, _, page = call(alone, "/nothing", HTTP_ACCEPT="text/html")
         self.assertEqual(status, 404)
-        self.assertIn("ページが見つかりません", page)
+        self.assertIn("<h1>ページが<wbr>見つかりません</h1>", page)
+        self.assertIn("<title>ページが見つかりません</title>", page)
         self.assertNotIn("のトップへ", page)
 
     def test_link_previews_and_the_home_screen_icon(self):
@@ -722,7 +726,7 @@ public = false
         self.assertIn('<a class="brand" href="#top">サイト一覧</a>', page)
         # the second section stands beside its preview on a computer
         self.assertIn('<section class="site accent-teal plate side" id="infra" aria-labelledby="infra-name">', page)
-        self.assertIn('<p class="headline">障害対応を練習。</p>', page)
+        self.assertIn('<p class="headline">障害対応を<wbr>練習。</p>', page)
         # the subtitle moves to the screen's bar
         self.assertIn('<span class="sub">インフラ運用トレーニングゲーム</span>', page)
         self.assertIn(

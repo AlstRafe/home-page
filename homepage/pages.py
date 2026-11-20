@@ -9,6 +9,7 @@ import hashlib
 import html
 
 from homepage import i18n, web
+from homepage.phrases import mark
 
 #: Light or dark: the device's setting until the visitor picks one with the button in the header
 #: (automatic -> light -> dark), the same choice News Site and CoreLab read (localStorage "theme": the
@@ -130,13 +131,21 @@ def owner_page(environ, start_response, state: str, problem: str = "", extra=())
         message = SIGN_IN_PROBLEMS["off"][1]
     alert = f'<p class="problem" role="alert">{say(message)}</p>' if message else ""
     if state == "in":
-        lead = say("この端末は持ち主としてログインしています。公開中のページでも、すべての機能が使えます。")
+        lead = mark(
+            i18n.text(lang, "この端末は持ち主としてログインしています。公開中のページでも、すべての機能が使えます。"),
+            lang,
+        )
         form = (
             '<form method="post" action="/owner"><input type="hidden" name="do" value="logout">'
             f'<button class="open" type="submit">{say("ログアウト")}</button></form>'
         )
     elif state == "form":
-        lead = say("このサイトの持ち主だけが使うページです。ログインすると、この端末ではすべての機能が使えます。")
+        lead = mark(
+            i18n.text(
+                lang, "このサイトの持ち主だけが使うページです。ログインすると、この端末ではすべての機能が使えます。"
+            ),
+            lang,
+        )
         form = (
             '<form method="post" action="/owner" class="signin">'
             '<input type="hidden" name="username" value="owner" autocomplete="username">'
@@ -179,16 +188,16 @@ def not_found(environ, start_response, site: str = ""):
             f'<a class="open" href="{top}">{e(i18n.text(lang, "{name} のトップへ", name=site))}</a>'
             f'<a class="back" href="{e(home)}">{arrow}{e(i18n.text(lang, "サイト一覧"))}</a>'
         )
-    heading = e(i18n.text(lang, "ページが見つかりません"))
+    heading = i18n.text(lang, "ページが見つかりません")
     main = (
-        f'<p class="date">{e(i18n.text(lang, "エラー {status}", status=404))}</p><h1>{heading}</h1>'
-        f'<p class="lead">{e(i18n.text(lang, "アドレスが変わったか、なくなった可能性があります。"))}</p>'
+        f'<p class="date">{e(i18n.text(lang, "エラー {status}", status=404))}</p><h1>{mark(heading, lang)}</h1>'
+        f'<p class="lead">{mark(i18n.text(lang, "アドレスが変わったか、なくなった可能性があります。"), lang)}</p>'
         f'<p class="go">{links}</p>'
     )
     return send(
         start_response,
         "text/html; charset=utf-8",
-        small_page(lang, home, heading, main),
+        small_page(lang, home, e(heading), main),
         "no-cache",
         vary=True,
         status="404 Not Found",
