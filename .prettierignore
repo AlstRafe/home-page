@@ -4,3 +4,5 @@
 patches/
 instance/
 package-lock.json
+# BudouX models, copied unchanged (homepage/phrases).
+homepage/phrases/*.json

@@ -34,6 +34,7 @@ from urllib.parse import parse_qsl, quote
 
 from homepage import i18n, status, web
 from homepage.pages import THEME_HASH, THEME_SCRIPT, not_found, owner_page, send, theme_button
+from homepage.phrases import mark
 from homepage.static import StaticFiles
 from homepage.status import JST
 from homepage.web import PACKAGE
@@ -626,7 +627,7 @@ class Portal:
             "theme": theme_button(lang),
             "theme_script": THEME_SCRIPT,
             "title": e(title),
-            "headline": _words(headline),
+            "headline": _words(headline, lang),
             "description": e(lead or title),
             "url": e(f"{origin}{web.url_path(home)}") if host else "",
             "image": e(f"{origin}{web.url_path(home)}og.png?v={web.version(PACKAGE / 'og.png')}") if host else "",
@@ -636,12 +637,14 @@ class Portal:
             "touch_icon": e(web.asset("apple-touch-icon.png", home)),
             "manifest": e(f"{home}portal.webmanifest"),
             "jump": jump,
-            "lead": f'<p class="lead">{e(lead)}</p>' if lead else "",
-            "points": ('<ul class="points">' + "".join(f"<li>{e(p)}</li>" for p in points) + "</ul>") if points else "",
+            "lead": f'<p class="lead">{mark(lead, lang)}</p>' if lead else "",
+            "points": ('<ul class="points">' + "".join(f"<li>{mark(p, lang)}</li>" for p in points) + "</ul>")
+            if points
+            else "",
             "find": self._find_all(shown, lang, home),
             "sites": "\n".join(self._section(site, n, visitor, lang, home) for n, site in enumerate(shown, 1)),
             "count": e(i18n.text(lang, "サイト {count} 件", count=len(shown))),
-            "about": f"<p>{e(about)}</p>" if about else "",
+            "about": f"<p>{mark(about, lang)}</p>" if about else "",
             "owner": "" if visitor else self._owner_note(lang, environ.get(OWNER_KEY) is True),
         }
         page = web.read(PACKAGE / "page.html").decode("utf-8")
@@ -682,12 +685,12 @@ class Portal:
         private = "" if site.public or visitor else f'<span class="private">{say("非公開（持ち主だけ）")}</span>'
         intro = (
             f'<h2 class="name" id="{anchor}-name">{self._icon(site)}<span>{e(name)}</span>{private}</h2>\n'
-            + (f'<p class="headline">{e(headline)}</p>\n' if headline else "")
-            + (f'<p class="desc">{e(description)}</p>\n' if description else "")
+            + (f'<p class="headline">{mark(headline, lang)}</p>\n' if headline else "")
+            + (f'<p class="desc">{mark(description, lang)}</p>\n' if description else "")
         )
         now = site.now(lang)
         items = "".join(
-            f'<li><a href="{e(site.mount + path)}">{e(text)}</a></li>' for text, path in now.get("items", [])
+            f'<li><a href="{e(site.mount + path)}">{mark(text, lang)}</a></li>' for text, path in now.get("items", [])
         )
         note = now.get("note", "")
         updated = site.updated()
@@ -704,7 +707,7 @@ class Portal:
         if items:
             heading = now.get("title") or i18n.text(lang, "新着")
             body = (
-                f'<div class="now"><p class="now-head">{e(heading)}'
+                f'<div class="now"><p class="now-head">{mark(heading, lang)}'
                 f"{f'<span>{e(note)}</span>' if note else ''}</p><ol>{items}</ol></div>"
             )
         elif shortcuts:
@@ -722,7 +725,7 @@ class Portal:
             find = _search_form(
                 home, f'<input type="hidden" name="site" value="{e(site.mount)}">', hint, f"{name}: {hint}", lang
             )
-        sub = f'<span class="sub">{e(subtitle)}</span>' if subtitle and subtitle != headline else ""
+        sub = f'<span class="sub">{mark(subtitle, lang)}</span>' if subtitle and subtitle != headline else ""
         state = f'<span class="status">{e(note)}</span>' if note and not items else ""
         screen = ""
         if body or find:
@@ -734,13 +737,15 @@ class Portal:
             go = go.replace("</p>\n", f"{state}</p>\n")
         facts = site.say(lang, "facts")
         if facts:
-            rows = "".join(f"<li><b>{e(big)}</b><span>{e(caption)}</span></li>" for big, caption in facts)
+            rows = "".join(
+                f"<li><b>{mark(big, lang)}</b><span>{mark(caption, lang)}</span></li>" for big, caption in facts
+            )
             extra = f'<ul class="facts" aria-label="{e(name)}: {say("特徴")}">{rows}</ul>\n'
         else:
             tags = site.say(lang, "tags")
             extra = (
                 f'<ul class="tags" aria-label="{e(name)}: {say("特徴")}">'
-                + "".join(f"<li>{e(t)}</li>" for t in tags)
+                + "".join(f"<li>{mark(t, lang)}</li>" for t in tags)
                 + "</ul>\n"
                 if tags
                 else ""
@@ -791,8 +796,8 @@ class Portal:
         signed = f'<p><a href="/owner">{say("持ち主としてログイン中です（ログアウト）")}</a></p>' if signed_in else ""
         return (
             f'<div class="owner"><h2>{say("持ち主向け")}</h2>{problems}{self._running(lang)}{signed}'
-            f"<p>{say('サイトを足すには sites.toml に [[site]] を1つ書き足します（VM へは master に push して約 1 分）。')} "
-            f"{say('この欄は訪問者には表示されません。')}</p></div>"
+            f"<p>{mark(i18n.text(lang, 'サイトを足すには sites.toml に [[site]] を1つ書き足します（VM へは master に push して約 1 分）。'), lang)} "
+            f"{mark(i18n.text(lang, 'この欄は訪問者には表示されません。'), lang)}</p></div>"
         )
 
     def _running(self, lang: str) -> str:
@@ -824,7 +829,8 @@ class Portal:
         if "disk" in machine:
             facts.append(say("ディスクの空き {size}", size=status.size(machine["disk"][0])))
         table = f'<table class="running"><caption>{say("動いている版")}</caption>{lines}</table>' if lines else ""
-        return f'{table}<p class="machine">{" · ".join(facts)}</p>'
+        # each fact on one line ("16 GB" never splits), a line may break between them
+        return f'{table}<p class="machine">{" · ".join(f"<span>{fact}</span>" for fact in facts)}</p>'
 
 
 def build(apps=(), allowed_hosts=None, visitor_hosts=None, config: Path | None = None, notes=()) -> Portal:
@@ -930,10 +936,11 @@ def _translations(entry: dict, keys: tuple) -> dict:
     return found
 
 
-def _words(text: str) -> str:
-    """The opening headline, each phrase (up to its 。 . , 、) in its own span, so they can come in one after another."""
+def _words(text: str, lang: str = i18n.DEFAULT) -> str:
+    """The opening headline, each phrase (up to its 。 . , 、) in its own span, so they can come in one after another
+    (and a line breaks between them, or between the smaller phrases inside one: homepage.phrases)."""
     parts = re.findall(r"(.+?(?:[。．.,、，!！?？]|$))(\s*)", text.strip())
-    spans = [f'<span class="w">{html.escape(word)}</span>{" " if gap else ""}' for word, gap in parts if word]
+    spans = [f'<span class="w">{mark(word, lang)}</span>{" " if gap else ""}' for word, gap in parts if word]
     return "".join(spans).rstrip()
 
 
