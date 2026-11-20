@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <meta name="format-detection" content="telephone=no">
-<meta name="theme-color" content="#edf0f2" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#141822" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fbfbfa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f0f10" media="(prefers-color-scheme: dark)">
 <script>{{ theme_script }}</script>
 <title>{{ title }}</title>
 <meta name="description" content="{{ description }}">
@@ -26,27 +26,28 @@
 <link rel="stylesheet" href="{{ css }}">
 </head>
 <body>
-<header class="top">
-<p class="date">{{ date }}</p><div class="tools">{{ theme }}{{ menu }}</div>
+<header class="ln">
+<a class="brand" href="#top">{{ title }}</a>
+{{ jump }}
+<div class="tools">{{ theme }}{{ menu }}</div>
 </header>
-<div class="page">
-<h1>{{ title }}</h1>
-<div class="body">
-<div class="intro">
+<main>
+<section class="hero" id="top">
+<div class="hero-in">
+<h1>{{ headline }}</h1>
 {{ lead }}
 {{ points }}
+{{ find }}
 </div>
-<main>
-<ol class="sites">
+</section>
 {{ sites }}
-</ol>
 </main>
-<footer>
+<footer class="foot">
+<div>
 {{ about }}
 <p class="count">{{ count }}</p>
 {{ owner }}
+</div>
 </footer>
-</div>
-</div>
 </body>
 </html>

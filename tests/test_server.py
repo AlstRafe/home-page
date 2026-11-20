@@ -119,7 +119,7 @@ entry = "nothing:site"
         self.assertIn("Nowhere", notes[1])
         portal = homepage.build(apps, config=self.config, notes=notes)
         page = call(portal, "/")[2]
-        self.assertIn('<a href="/shop/">Shop</a>', page)
+        self.assertIn("<span>Shop</span></h2>", page)
         self.assertIn("Buy things.", page)
         self.assertIn('href="/shop/today">today</a>', page)
         self.assertIn("/broken を読み込めませんでした", page)

@@ -49,6 +49,10 @@ TEXTS = {
     "検索": {"ko": "검색", "en-GB": "Search", "zh-TW": "搜尋"},
     "{name} の中を検索": {"ko": "{name}에서 검색", "en-GB": "Search {name}", "zh-TW": "在 {name} 中搜尋"},
     "よく使うページ": {"ko": "자주 쓰는 페이지", "en-GB": "Popular pages", "zh-TW": "常用頁面"},
+    "サイトへ移動": {"ko": "사이트로 이동", "en-GB": "Go to a site", "zh-TW": "前往網站"},
+    "検索するサイト": {"ko": "검색할 사이트", "en-GB": "Site to search", "zh-TW": "要搜尋的網站"},
+    "サイトを選んで検索": {"ko": "사이트를 골라 검색", "en-GB": "Pick a site, then search", "zh-TW": "選擇網站後搜尋"},
+    "検索する言葉": {"ko": "검색어", "en-GB": "Search words", "zh-TW": "搜尋字詞"},
     "サイト {count} 件": {"ko": "사이트 {count}개", "en-GB": "{count} sites", "zh-TW": "共 {count} 個網站"},
     "エラー {status}": {"ko": "오류 {status}", "en-GB": "Error {status}", "zh-TW": "錯誤 {status}"},
     "ページが見つかりません": {"ko": "페이지를 찾을 수 없습니다", "en-GB": "Page not found", "zh-TW": "找不到這個頁面"},
@@ -127,8 +131,6 @@ TEXTS = {
     },
 }
 
-_WEEKDAYS = {"ja": "月火水木金土日", "ko": "월화수목금토일", "zh-TW": "一二三四五六日"}
-_EN_WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 _EN_MONTHS = (
     "January",
     "February",
@@ -150,16 +152,6 @@ def text(lang: str, ja: str, **values) -> str:
     if lang == "en-GB" and values.get("count") == 1 and ja == "サイト {count} 件":
         return "1 site"
     return TEXTS.get(ja, {}).get(lang, ja).format(**values)
-
-
-def date(lang: str, day: datetime) -> str:
-    """The day as people write it in ``lang``: 2026年10月27日（火） / Tuesday 27 October 2026."""
-    if lang == "en-GB":
-        return f"{_EN_WEEKDAYS[day.weekday()]} {day.day} {_EN_MONTHS[day.month - 1]} {day.year}"
-    if lang == "ko":
-        return f"{day.year}년 {day.month}월 {day.day}일 ({_WEEKDAYS['ko'][day.weekday()]})"
-    weekday = _WEEKDAYS.get(lang, _WEEKDAYS["ja"])[day.weekday()]
-    return f"{day.year}年{day.month}月{day.day}日（{'週' if lang == 'zh-TW' else ''}{weekday}）"
 
 
 def month_day(lang: str, day: datetime) -> str:
