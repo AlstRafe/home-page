@@ -400,35 +400,74 @@ a {
   content: "✓";
 }
 
-/* The opening screen: one big headline, the lead, what every site shares, and one search for all of them */
+/* The opening: whose sites these are, in a few plain lines and one search, and beside it (on a computer) what
+   changed lately. Left-aligned and only as tall as its content: no slogan filling the window. */
 .hero {
   display: grid;
-  align-content: center;
-  min-height: min(42rem, calc(100svh - var(--nav)));
-  padding: clamp(3.5rem, 2rem + 6vw, 6rem) var(--gutter);
+  gap: 2.5rem 4rem;
+  max-width: calc(var(--wide) + 2 * var(--gutter));
+  margin-inline: auto;
+  padding: clamp(2.5rem, 1.5rem + 4vw, 4.5rem) var(--gutter) clamp(3rem, 2rem + 3vw, 4.5rem);
   scroll-margin-top: var(--nav);
 }
 .hero-in > * {
-  max-width: 50rem;
-  margin-inline: auto;
+  max-width: 38rem;
 }
 h1 {
-  margin: 0 auto;
-  font-size: clamp(2.6rem, 1.2rem + 6vw, 6rem);
+  margin: 0;
+  font-size: clamp(2rem, 1.3rem + 2.6vw, 3.25rem);
   font-weight: 800;
-  line-height: 1.08;
-  letter-spacing: -0.025em;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+@media (min-width: 64rem) {
+  .hero {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 24rem);
+    align-items: start;
+  }
+}
+/* Recent changes: a dated list, the plainest proof that someone looks after the sites */
+.log h2 {
+  margin: 0 0 0.6rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+.log ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--ink);
+}
+.log li {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  gap: 0 0.75rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+.log time {
+  grid-row: span 2;
+  color: var(--soft);
+  font-variant-numeric: tabular-nums;
+}
+.log a {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.log p {
+  grid-column: 2;
+  margin: 0;
 }
 .w {
   display: inline-block;
 }
 .lead {
-  margin-top: 1.4rem;
+  margin-top: 1rem;
   margin-bottom: 0;
-  font-size: clamp(1.05rem, 0.95rem + 0.5vw, 1.25rem);
-  line-height: 1.7;
-  color: var(--soft);
-  text-wrap: balance;
+  font-size: clamp(1rem, 0.95rem + 0.3vw, 1.15rem);
+  line-height: 1.8;
 }
 /* What every site shares: one quiet line */
 .points {
@@ -529,7 +568,7 @@ h1 {
 
 /* One site per screen: its name, a headline, what it is, how to go in, a framed preview, a few facts */
 .site {
-  padding: clamp(4.5rem, 2rem + 8vw, 9rem) var(--gutter);
+  padding: clamp(3rem, 1.5rem + 5vw, 5.5rem) var(--gutter);
   scroll-margin-top: var(--nav);
 }
 .site.band {
@@ -550,9 +589,9 @@ h1 {
   background: var(--plate);
   color: var(--ink);
 }
-.site > * {
-  max-width: var(--wide);
-  margin-inline: auto;
+/* One left edge for every block of a section (the page's width, centred in the window) */
+.site {
+  padding-inline: max(var(--gutter), (100% - var(--wide)) / 2);
 }
 /* The site's name over its headline, in the site's own colour */
 .name {
@@ -561,17 +600,17 @@ h1 {
   gap: 0.5rem;
   margin-top: 0;
   margin-bottom: 0;
-  font-size: clamp(1.1rem, 1rem + 0.4vw, 1.3rem);
-  font-weight: 700;
-  line-height: 1.3;
-  color: var(--a);
+  font-size: clamp(1.75rem, 1.2rem + 2vw, 2.75rem);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
 }
 .icon {
   display: inline-grid;
   place-items: center;
   flex: none;
-  width: 1.5rem;
-  height: 1.5rem;
+  width: 0.85em;
+  height: 0.85em;
   color: var(--a);
 }
 .icon svg {
@@ -603,11 +642,11 @@ h1 {
   letter-spacing: -0.02em;
 }
 .site .desc {
-  margin-top: 1.25rem;
+  max-width: 36rem;
+  margin-top: 0.9rem;
   margin-bottom: 0;
-  font-size: clamp(1.05rem, 0.95rem + 0.4vw, 1.25rem);
-  color: var(--soft);
-  text-wrap: balance;
+  font-size: clamp(1rem, 0.95rem + 0.25vw, 1.1rem);
+  line-height: 1.8;
 }
 .tags {
   list-style: none;
@@ -743,7 +782,7 @@ h1 {
 }
 .now a {
   display: grid;
-  grid-template-columns: 2.2rem minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
   gap: 0.5rem;
   padding: 0.8rem 1.1rem;
@@ -751,12 +790,6 @@ h1 {
   font-size: 1.02rem;
   text-decoration: none;
   transition: background-color var(--t) var(--ease);
-}
-.now a::before {
-  counter-increment: item;
-  content: counter(item, decimal-leading-zero);
-  font: 0.8rem var(--mono);
-  color: var(--soft);
 }
 .now a::after {
   content: "›";
@@ -848,35 +881,15 @@ h1 {
   color: var(--soft);
 }
 
-/* Centred on wider screens, as a product page; left-aligned on phones, where centred lines are hard to read */
-@media (min-width: 48rem) {
-  .hero,
-  .site > :is(.name, .headline, .desc, .tags, .go) {
-    text-align: center;
-  }
-  .hero .points,
-  .site .tags,
-  .site .go,
-  .site .name {
-    justify-content: center;
-  }
-  .hero .find {
-    margin-inline: auto;
-  }
-  .site > .desc {
-    max-width: 40rem;
-  }
-}
-
 /* Even sections on a computer: the words on the left, the preview beside them running off the right edge of the
-   window, held in place while the facts pass by it one after another */
+   window (odd ones keep the preview under the words, so the page does not repeat one shape) */
 @media (min-width: 64rem) {
   .site.side {
     display: grid;
     grid-template-columns:
-      [full-start] minmax(var(--gutter), 1fr) [text-start] minmax(0, 31rem) [text-end] minmax(2.5rem, 5rem)
-      [visual-start] minmax(0, 34rem) [visual-end] minmax(var(--gutter), 1fr) [full-end];
-    grid-template-rows: repeat(4, auto) 1fr;
+      [full-start] minmax(var(--gutter), 1fr) [text-start] minmax(0, 29rem) [text-end] minmax(2.5rem, 5rem)
+      [visual-start] minmax(0, 36rem) [visual-end] minmax(var(--gutter), 1fr) [full-end];
+    grid-template-rows: repeat(3, auto) 1fr;
     align-items: start;
     padding-inline: 0;
   }
@@ -884,36 +897,12 @@ h1 {
     grid-column: text;
     max-width: none;
     margin-inline: 0;
-    text-align: left;
-  }
-  .site.side > :is(.name, .go, .tags) {
-    justify-content: flex-start;
   }
   .site.side > .screen {
     grid-column: visual-start / full-end;
     grid-row: 1 / -1;
-    position: sticky;
-    top: calc(var(--nav) + 3rem);
     margin-top: 0;
     border-right: 0;
-  }
-  .site.side > .facts {
-    display: block;
-    margin-top: 0;
-  }
-  .site.side .facts li {
-    margin-top: clamp(4rem, 18vh, 11rem);
-    padding: 0;
-    border-left: 0;
-  }
-  .site.side .facts b {
-    font-size: clamp(3rem, 1.5rem + 3vw, 4.5rem);
-    font-size: min(clamp(3rem, 1.5rem + 3vw, 4.5rem), 16cqi);
-  }
-  /* The column is narrower than a full-width section: a smaller headline keeps it to two lines
-     (「障害対応は、/ブラウザの中で練習。」) */
-  .site.side > .headline {
-    font-size: clamp(2.2rem, 1rem + 1.9vw, 2.9rem);
   }
 }
 
@@ -1085,192 +1074,51 @@ button.open {
    cannot tie an animation to the scroll): the effects only bring in what is already there. Tied to the scroll, so
    scrolling back up plays them backwards; nothing moves by itself except the opening's entrance, once. */
 @media (prefers-reduced-motion: no-preference) {
-  /* The opening: its phrases arrive one after another, then the words, the points and the search */
-  .hero .w,
-  .hero-in > :not(h1) {
-    animation: arrive 1.1s var(--settle) both;
+  /* The opening comes in once, as one piece */
+  .hero > * {
+    animation: arrive 0.7s var(--settle) both;
   }
-  .hero .w:nth-child(2) {
-    animation-delay: 0.14s;
-  }
-  .hero .w:nth-child(3) {
-    animation-delay: 0.28s;
-  }
-  .hero .w:nth-child(n + 4) {
-    animation-delay: 0.42s;
-  }
-  .hero-in > .lead {
-    animation-delay: 0.45s;
-  }
-  .hero-in > .points {
-    animation-delay: 0.55s;
-  }
-  .hero-in > .find {
-    animation-delay: 0.65s;
+  .hero > .log {
+    animation-delay: 0.12s;
   }
 
   @supports (animation-timeline: view()) {
-    /* ...and as the page moves on, the opening steps back and fades */
-    .hero {
-      view-timeline: --hero block;
-    }
-    .hero-in {
-      animation: step-back linear both;
-      animation-timeline: --hero;
-      animation-range: exit 0% exit 85%;
-    }
-
-    /* A site's name, headline, words and links rise into place as they come up */
-    .site > :is(.name, .headline, .desc, .go, .tags) {
-      animation: rise var(--follow) both;
-      animation-timeline: view();
-      animation-range: entry 10% cover 30%;
-    }
-    /* The preview grows to its full size, rising a little slower than the page */
+    /* A site's preview rises a little slower than the page; its rows slide in one after another. Only the
+       preview moves: the words are simply there. */
     .site > .screen {
       animation: grow var(--follow) both;
       animation-timeline: view();
-      animation-range: entry 0% cover 45%;
+      animation-range: entry 0% cover 40%;
     }
-    /* What it has now slides in row by row; the most used pages assemble tile by tile, from both sides */
     .now li {
       animation: slide-in var(--follow) both;
       animation-timeline: view();
       animation-range: entry 0% cover 22%;
     }
-    .links li {
-      animation: assemble var(--follow) both;
-      animation-timeline: view();
-      animation-range: entry 0% cover 22%;
-    }
-    .links li:nth-child(even) {
-      animation-name: assemble-down;
-    }
-    :is(.now, .links) li:nth-child(2) {
+    .now li:nth-child(2) {
       animation-range: entry 0% cover 26%;
     }
-    :is(.now, .links) li:nth-child(3) {
+    .now li:nth-child(n + 3) {
       animation-range: entry 0% cover 30%;
-    }
-    :is(.now, .links) li:nth-child(4) {
-      animation-range: entry 0% cover 34%;
-    }
-    :is(.now, .links) li:nth-child(n + 5) {
-      animation-range: entry 0% cover 38%;
-    }
-    /* The facts come up one after another, each big number uncovered from below */
-    .facts li {
-      animation: rise var(--follow) both;
-      animation-timeline: view();
-      animation-range: entry 0% cover 24%;
-    }
-    .facts li:nth-child(2) {
-      animation-range: entry 0% cover 30%;
-    }
-    .facts li:nth-child(3) {
-      animation-range: entry 0% cover 36%;
-    }
-    .facts li:nth-child(4) {
-      animation-range: entry 0% cover 42%;
-    }
-    .facts b {
-      animation: uncover var(--follow) both;
-      animation-timeline: view();
-      animation-range: entry 0% cover 30%;
-    }
-
-    @media (min-width: 64rem) {
-      /* Beside its words: the preview comes in from the right edge, then holds while the facts pass it, each one
-         lit as it crosses the middle of the window */
-      .site.side {
-        view-timeline: --side block;
-      }
-      .site.side > .screen {
-        animation: from-edge var(--follow) both;
-        animation-timeline: --side;
-        animation-range: entry 0% entry 75%;
-      }
-      .site.side .facts li {
-        animation: pass-by linear both;
-        animation-timeline: view();
-        animation-range: cover 5% cover 95%;
-      }
-      .site.side .facts b {
-        animation: none;
-      }
     }
   }
 }
 @keyframes arrive {
   from {
     opacity: 0;
-    transform: translateY(1.25rem);
-  }
-}
-@keyframes step-back {
-  to {
-    opacity: 0;
-    transform: translateY(-3rem) scale(0.94);
-  }
-}
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(2.25rem);
+    transform: translateY(0.75rem);
   }
 }
 @keyframes grow {
   from {
     opacity: 0.35;
-    transform: translateY(5rem) scale(0.9);
+    transform: translateY(3rem) scale(0.96);
   }
 }
 @keyframes slide-in {
   from {
     opacity: 0;
     transform: translateX(-1.75rem);
-  }
-}
-@keyframes assemble {
-  from {
-    opacity: 0;
-    transform: translateY(1.5rem) scale(0.94);
-  }
-}
-@keyframes assemble-down {
-  from {
-    opacity: 0;
-    transform: translateY(-1.5rem) scale(0.94);
-  }
-}
-@keyframes uncover {
-  from {
-    clip-path: inset(100% -0.3em -0.3em -0.3em);
-    transform: translateY(0.5em);
-  }
-  to {
-    clip-path: inset(-0.3em);
-  }
-}
-@keyframes from-edge {
-  from {
-    opacity: 0.3;
-    transform: translateX(10rem);
-  }
-}
-@keyframes pass-by {
-  0% {
-    opacity: 0.12;
-    transform: translateY(2rem);
-  }
-  38%,
-  62% {
-    opacity: 1;
-    transform: none;
-  }
-  100% {
-    opacity: 0.12;
-    transform: translateY(-1.5rem);
   }
 }
 

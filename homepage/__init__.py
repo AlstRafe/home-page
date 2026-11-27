@@ -28,7 +28,7 @@ import time
 import tomllib
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import parse_qsl, quote
 
@@ -101,6 +101,8 @@ CHECK_SECONDS = 1.0
 PREVIEW_SECONDS = 60.0
 #: The words a card's search box sends at most.
 SEARCH_CHARACTERS = 200
+#: How many of sites.toml's [[change]] lines the opening shows
+CHANGES_SHOWN = 6
 #: The page colour (portal.css --paper), for the phone's bar and the app's splash screen.
 PAPER = "#fbfbfa"
 
@@ -251,6 +253,7 @@ class Portal:
         self._checked = 0.0
         self._stamp: tuple | None = None  # None: not read yet
         self.settings: dict = {}
+        self.changes: list[dict] = []
         #: lang -> the page's texts in that language (sites.toml [ko] ...).
         self.page_texts: dict = {}
         self.sites: list[Site] = []
@@ -283,6 +286,8 @@ class Portal:
                 return
             self.settings = data
             self.sites, self.problems = self._sites(data)
+            self.changes, wrong = _changes(data.get("change", []))
+            self.problems += wrong
             try:
                 self.page_texts = _translations(data, PAGE_TEXTS)
             except ValueError as exc:
@@ -642,6 +647,7 @@ class Portal:
             if points
             else "",
             "find": self._find_all(shown, lang, home),
+            "log": self._log(shown, lang),
             "sites": "\n".join(self._section(site, n, visitor, lang, home) for n, site in enumerate(shown, 1)),
             "count": e(i18n.text(lang, "サイト {count} 件", count=len(shown))),
             "about": f"<p>{mark(about, lang)}</p>" if about else "",
@@ -649,6 +655,28 @@ class Portal:
         }
         page = web.read(PACKAGE / "page.html").decode("utf-8")
         return re.sub(r"\{\{ (\w+) \}\}", lambda m: values.get(m.group(1), ""), page)
+
+    def _log(self, shown: list[Site], lang: str) -> str:
+        """What changed lately (sites.toml ``[[change]]``), newest first: the day, the site and one plain line."""
+        e = html.escape
+        names = {site.mount: site for site in shown}
+        rows = []
+        for change in self.changes[:CHANGES_SHOWN]:
+            site = names.get(change["site"])
+            if change["site"] and site is None:
+                continue  # a change on a site this visitor does not see
+            text = change["texts"].get(lang) or change["texts"]["ja"]
+            where = f'<a href="{e(site.mount)}/">{e(site.say(lang, "name"))}</a>' if site else ""
+            rows.append(
+                f'<li><time datetime="{change["day"].isoformat()}">{e(i18n.month_day(lang, change["day"]))}</time>'
+                f"{where}<p>{mark(text, lang)}</p></li>"
+            )
+        if not rows:
+            return ""
+        return (
+            f'<aside class="log" aria-labelledby="log-head"><h2 id="log-head">{_sayer(lang)("最近の変更")}</h2>'
+            f"<ol>{''.join(rows)}</ol></aside>"
+        )
 
     @staticmethod
     def _find_all(shown: list[Site], lang: str, home: str) -> str:
@@ -681,12 +709,12 @@ class Portal:
         href = e(site.mount + "/")
         anchor = _anchor(site)
         name, subtitle, description = site.say(lang, "name"), site.say(lang, "subtitle"), site.say(lang, "description")
-        headline = site.say(lang, "headline") or subtitle
+        headline = site.say(lang, "headline")
         private = "" if site.public or visitor else f'<span class="private">{say("非公開（持ち主だけ）")}</span>'
         intro = (
             f'<h2 class="name" id="{anchor}-name">{self._icon(site)}<span>{e(name)}</span>{private}</h2>\n'
             + (f'<p class="headline">{mark(headline, lang)}</p>\n' if headline else "")
-            + (f'<p class="desc">{mark(description, lang)}</p>\n' if description else "")
+            + (f'<p class="desc">{mark(description or subtitle, lang)}</p>\n' if description or subtitle else "")
         )
         now = site.now(lang)
         items = "".join(
@@ -907,6 +935,35 @@ def _facts(value, where: str = "") -> tuple:
     ):
         raise ValueError(f'{where}facts は [["大きな文字", "その説明"], …] の並びです（4 つまで）。')
     return tuple((big.strip(), caption.strip()) for big, caption in value)
+
+
+def _changes(entries) -> tuple[list[dict], list[str]]:
+    """sites.toml ``[[change]]``: day = 2026-11-27, site = "/val" (optional), text = "…" and ko / en-GB / zh-TW."""
+    if not isinstance(entries, list):
+        return [], ["[[change]] の書き方が違います。"]
+    found, problems = [], []
+    for number, entry in enumerate(entries, 1):
+        day = entry.get("day") if isinstance(entry, dict) else None
+        if isinstance(day, str):
+            try:
+                day = date.fromisoformat(day)
+            except ValueError:
+                day = None
+        texts = {lang: entry.get("text" if lang == i18n.DEFAULT else lang) for lang in i18n.LANGS} if day else {}
+        site = entry.get("site", "") if isinstance(entry, dict) else ""
+        if (
+            not isinstance(day, date)
+            or not isinstance(site, str)
+            or not isinstance(texts.get(i18n.DEFAULT), str)
+            or not all(isinstance(value, (str, type(None))) for value in texts.values())
+        ):
+            problems.append(f'{number} 番目の変更: day = 2026-11-27 と text = "…" が要ります（site は "/val" の形）。')
+            continue
+        texts = {lang: value.strip() for lang, value in texts.items() if value and value.strip()}
+        day = day.date() if isinstance(day, datetime) else day
+        found.append({"day": day, "site": site.rstrip("/"), "texts": texts})
+    found.sort(key=lambda change: change["day"], reverse=True)
+    return found, problems
 
 
 def _translations(entry: dict, keys: tuple) -> dict:

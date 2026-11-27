@@ -128,8 +128,9 @@ home_link = "own"
         self.assertIn("<span>NewsBridge</span></h2>", page)
         self.assertIn("<span>CoreLab</span></h2>", page)
         self.assertLess(page.index("/news/"), page.index("/infra/"))
-        # no headline: the app's own subtitle
-        self.assertIn('<p class="headline">翻訳して<wbr>読み<wbr>比べる<wbr>ニュース</p>', page)
+        # no headline unless sites.toml writes one: the name is the heading, the description says what it does
+        self.assertNotIn('class="headline"', page)
+        self.assertIn('<span class="sub">翻訳して<wbr>読み<wbr>比べる<wbr>ニュース</span>', page)  # in the preview bar
         self.assertIn('<li><a href="#news">NewsBridge</a></li><li><a href="#infra">CoreLab</a></li>', page)  # the nav
         self.assertIn('href="/news/stories/a">台風が<wbr>接近</a>', page)
         self.assertIn("取得 5分前", page)
@@ -469,7 +470,7 @@ name = "Gone"
         self.assertIn('<h1><span class="w">사이트 목록</span></h1>', page)
         self.assertIn("<li>무료</li>", page)
         self.assertIn("小さなサイトの入口です。", page)  # a text without a translation stays Japanese
-        self.assertIn('<p class="headline">인프라 운영 트레이닝 게임</p>', page)
+        self.assertIn('<p class="desc">인프라 운영 트레이닝 게임</p>', page)  # no description: the subtitle
         self.assertIn("<li>설치 불필요</li>", page)
         self.assertIn("CoreLab 열기", page)
         self.assertIn("사이트 2개", page)
@@ -477,7 +478,7 @@ name = "Gone"
         self.assertIn('<a href="?lang=en-GB" lang="en-GB" hreflang="en-GB">English (UK)</a>', page)
         self.assertIn("Cookie", headers["Vary"])
         self.assertIn(
-            '<p class="headline">翻訳して<wbr>読み<wbr>比べる<wbr>ニュース</p>', page
+            '<span class="sub">翻訳して<wbr>読み<wbr>比べる<wbr>ニュース</span>', page
         )  # no [site.ko] for News: its own
         english = call(self.portal, "/", HTTP_ACCEPT_LANGUAGE="en-US,en;q=0.9,ja;q=0.5")[2]
         self.assertIn('<html lang="en-GB">', english)
@@ -709,6 +710,24 @@ public = false
         page = call(self.portal, "/")[2]
         self.assertIn('<nav class="links" aria-label="Memo: よく使うページ"><ul>', page)
         self.assertIn('<li><a href="/memo/digest"><b>今日のまとめ</b><code>/memo/digest</code></a></li>', page)
+
+    def test_recent_changes_are_listed_newest_first_in_the_visitors_language(self):
+        self.write(
+            self.config.read_text(encoding="utf-8")
+            + '\n[[change]]\nday = 2026-11-19\nsite = "/news"\ntext = "RSS を出しました。"\nen-GB = "An RSS feed."\n'
+            + '\n[[change]]\nday = 2026-11-26\ntext = "見出しを書き直しました。"\n'
+            + '\n[[change]]\nday = 2026-11-20\nsite = "/hidden"\ntext = "見えないサイト"\n'
+        )
+        page = call(self.portal, "/")[2]
+        self.assertIn('<h2 id="log-head">最近の変更</h2>', page)
+        self.assertLess(page.index("見出しを"), page.index("RSS"))
+        self.assertIn('<time datetime="2026-11-19">11月19日</time><a href="/news/">NewsBridge</a>', page)
+        self.assertNotIn("見えないサイト", page)  # a site this visitor does not see
+        english = call(self.portal, "/", HTTP_COOKIE="lang=en-GB")[2]
+        self.assertIn("<p>An RSS feed.</p>", english)
+        self.assertIn("19 Nov", english)
+        self.write(self.config.read_text(encoding="utf-8") + '\n[[change]]\nday = "yesterday"\ntext = "x"\n')
+        self.assertIn("4 番目の変更: day = 2026-11-27", call(self.portal, "/")[2])
 
     def test_a_sites_section_has_a_headline_facts_and_may_be_the_dark_plate(self):
         self.write(

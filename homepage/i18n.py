@@ -39,6 +39,7 @@ TEXTS = {
     "オフ": {"ko": "끔", "en-GB": "off", "zh-TW": "關"},
     "オン": {"ko": "켬", "en-GB": "on", "zh-TW": "開"},
     "特徴": {"ko": "특징", "en-GB": "Features", "zh-TW": "特色"},
+    "最近の変更": {"ko": "최근 변경", "en-GB": "Recent changes", "zh-TW": "最近的更動"},
     "新着": {"ko": "새 소식", "en-GB": "Latest", "zh-TW": "最新"},
     "{name} を開く": {"ko": "{name} 열기", "en-GB": "Open {name}", "zh-TW": "開啟 {name}"},
     "非公開（持ち主だけ）": {
