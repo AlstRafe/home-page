@@ -401,9 +401,12 @@ a {
 }
 
 /* The opening: whose sites these are, in a few plain lines and one search, and beside it (on a computer) what
-   changed lately. Left-aligned and only as tall as its content: no slogan filling the window. */
+   changed lately. Left-aligned, no slogan; it fills the first screen (as a product page's opening) and steps back as
+   the page moves on (Motion, below). */
 .hero {
   display: grid;
+  align-content: center;
+  min-height: min(44rem, calc(100svh - var(--nav)));
   gap: 2.5rem 4rem;
   max-width: calc(var(--wide) + 2 * var(--gutter));
   margin-inline: auto;
@@ -1074,51 +1077,158 @@ button.open {
    cannot tie an animation to the scroll): the effects only bring in what is already there. Tied to the scroll, so
    scrolling back up plays them backwards; nothing moves by itself except the opening's entrance, once. */
 @media (prefers-reduced-motion: no-preference) {
-  /* The opening comes in once, as one piece */
-  .hero > * {
-    animation: arrive 0.7s var(--settle) both;
+  /* The opening: the name, the words, the points and the search arrive one after another, then what changed lately */
+  .hero-in > *,
+  .hero > .log {
+    animation: arrive 1s var(--settle) both;
+  }
+  .hero-in > :nth-child(2) {
+    animation-delay: 0.12s;
+  }
+  .hero-in > :nth-child(3) {
+    animation-delay: 0.24s;
+  }
+  .hero-in > :nth-child(n + 4) {
+    animation-delay: 0.34s;
   }
   .hero > .log {
-    animation-delay: 0.12s;
+    animation-delay: 0.46s;
   }
 
   @supports (animation-timeline: view()) {
-    /* A site's preview rises a little slower than the page; its rows slide in one after another. Only the
-       preview moves: the words are simply there. */
+    /* ...and as the page moves on, the opening steps back and fades */
+    .hero {
+      view-timeline: --hero block;
+    }
+    .hero-in,
+    .hero > .log {
+      animation: step-back linear both;
+      animation-timeline: --hero;
+      animation-range: exit 0% exit 85%;
+    }
+    /* A site's name is uncovered from below like a mask lifting (not the same fade-up as everything else); its
+       words and links follow, only fading in, a little after */
+    .site > :is(.name, .headline) {
+      animation: uncover var(--follow) both;
+      animation-timeline: view();
+      animation-range: entry 5% cover 25%;
+    }
+    .site > :is(.desc, .tags, .go) {
+      animation: fade linear both;
+      animation-timeline: view();
+      animation-range: entry 15% cover 32%;
+    }
+    /* The preview grows to its full size, rising a little slower than the page */
     .site > .screen {
       animation: grow var(--follow) both;
       animation-timeline: view();
-      animation-range: entry 0% cover 40%;
+      animation-range: entry 0% cover 45%;
     }
+    /* What it has now slides in row by row; the most used pages assemble tile by tile, from both sides */
     .now li {
       animation: slide-in var(--follow) both;
       animation-timeline: view();
       animation-range: entry 0% cover 22%;
     }
-    .now li:nth-child(2) {
+    .links li {
+      animation: assemble var(--follow) both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 22%;
+    }
+    .links li:nth-child(even) {
+      animation-name: assemble-down;
+    }
+    :is(.now, .links) li:nth-child(2) {
       animation-range: entry 0% cover 26%;
     }
-    .now li:nth-child(n + 3) {
+    :is(.now, .links) li:nth-child(3) {
       animation-range: entry 0% cover 30%;
+    }
+    :is(.now, .links) li:nth-child(n + 4) {
+      animation-range: entry 0% cover 34%;
+    }
+    .facts li {
+      animation: rise var(--follow) both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 24%;
+    }
+    .facts li:nth-child(n + 2) {
+      animation-range: entry 0% cover 32%;
+    }
+
+    @media (min-width: 64rem) {
+      /* Beside its words, the preview comes in from the right edge of the window and settles */
+      .site.side {
+        view-timeline: --side block;
+      }
+      .site.side > .screen {
+        animation: from-edge var(--follow) both;
+        animation-timeline: --side;
+        animation-range: entry 0% entry 75%;
+      }
     }
   }
 }
 @keyframes arrive {
   from {
     opacity: 0;
-    transform: translateY(0.75rem);
+    transform: translateY(1.25rem);
+  }
+}
+@keyframes step-back {
+  to {
+    opacity: 0;
+    transform: translateY(-3rem) scale(0.94);
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(2.25rem);
+  }
+}
+@keyframes uncover {
+  from {
+    clip-path: inset(100% -0.3em -0.3em -0.3em);
+    transform: translateY(0.6em);
+  }
+  to {
+    clip-path: inset(-0.3em);
+  }
+}
+@keyframes fade {
+  from {
+    opacity: 0;
   }
 }
 @keyframes grow {
   from {
     opacity: 0.35;
-    transform: translateY(3rem) scale(0.96);
+    transform: translateY(5rem) scale(0.9);
   }
 }
 @keyframes slide-in {
   from {
     opacity: 0;
     transform: translateX(-1.75rem);
+  }
+}
+@keyframes assemble {
+  from {
+    opacity: 0;
+    transform: translateY(1.5rem) scale(0.94);
+  }
+}
+@keyframes assemble-down {
+  from {
+    opacity: 0;
+    transform: translateY(-1.5rem) scale(0.94);
+  }
+}
+@keyframes from-edge {
+  from {
+    opacity: 0.3;
+    transform: translateX(10rem);
   }
 }
 
