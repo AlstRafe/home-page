@@ -3,31 +3,27 @@
 # 書き間違いがあると、このPCから開いたときだけページ下の「持ち主向け」欄に理由が出ます。
 
 title = "サイト一覧"
-headline = "読む。学ぶ。調べる。" # ページいちばん上の大きな見出し（省略すると title）
-lead = "個人で運営している、小さなサイトの入口です。気になるものを選んで開いてください。"
-points = ["登録不要", "無料", "スマホでも使えます"]
+headline = "haruxera"
+lead = "ニュースの読み比べ、インフラ障害の練習、VALORANT の戦績。ひとりで作って、気づいたところから直しています。どれも登録なしで使えます。"
 about = "どのサイトも個人が試験的に公開しているもので、内容や公開は予告なく変わることがあります。"
 
 # ほかの言語（訪問者が右上のメニューで選ぶ。ない項目は日本語のまま）。各サイトの [site.ko] なども同じ形。
 [ko]
 title = "사이트 목록"
-headline = "읽고, 배우고, 찾아보세요."
-lead = "개인이 운영하는 작은 사이트들의 입구입니다. 관심 있는 사이트를 골라 열어 보세요."
-points = ["회원가입 불필요", "무료", "스마트폰에서도 사용 가능"]
+headline = "haruxera"
+lead = "뉴스 비교 읽기, 인프라 장애 연습, VALORANT 전적. 혼자 만들고, 눈에 띄는 곳부터 고치고 있습니다. 모두 가입 없이 쓸 수 있습니다."
 about = "모든 사이트는 개인이 시험적으로 공개하는 것으로, 내용과 공개 여부는 예고 없이 바뀔 수 있습니다."
 
 [en-GB]
 title = "All sites"
-headline = "Read. Learn. Look it up."
-lead = "The way in to a few small sites run by one person. Pick one that interests you and open it."
-points = ["No sign-up", "Free", "Works on phones"]
+headline = "haruxera"
+lead = "A news reader that puts outlets side by side, a game for practising on broken servers, and a VALORANT stats tracker. One person builds them and fixes things as they turn up. None of them needs an account."
 about = "Every site here is a personal experiment; content and availability may change without notice."
 
 [zh-TW]
 title = "網站列表"
-headline = "閱讀。學習。查詢。"
-lead = "這裡是個人經營的幾個小網站的入口。挑一個感興趣的打開看看吧。"
-points = ["免註冊", "免費", "手機也能用"]
+headline = "haruxera"
+lead = "新聞比較閱讀、基礎架構故障練習、VALORANT 戰績。一個人做的，發現問題就修。全部不用註冊。"
 about = "每個網站都是個人試驗性公開的，內容與公開狀態可能隨時變更，恕不另行通知。"
 
 # サーバー（launcher.py が起動）。ここと Python サイトの指定を変えると、サーバーが自動で再起動します。
@@ -79,40 +75,28 @@ moved_to = "haruxera.duckdns.org" # 公開の名前のうちこれ以外（Funne
 mount = "/news"
 python = "../News Site/work/app"
 entry = "newsreader.hosting:site" # 名前と副題は News Site 側が返す
-headline = "同じニュースを、各社で読み比べ。"
-facts = [["毎時", "新しい記事を取得"], ["原文と訳", "並べて読める"], ["3 言語", "英語・中国語・韓国語の記事を日本語で"]]
-description = "BBC・中央社・聯合ニュースや InfoQ・iThome の記事を毎時集めて、原文と訳を並べて読めます。"
+description = "BBC・中央社・聯合ニュース・InfoQ・iThome など 8 媒体の記事を 1 時間ごとに集めて日本語に訳し、原文と並べて出します。同じ話題を何社かが書いていれば、まとめて読み比べられます。"
 icon = "news"
 accent = "red"
-tags = ["毎時更新", "英・中・韓 → 日本語", "各社の読み比べ"]
 search = "/?q={q}"
 search_hint = "記事を検索（日本語も可）"
 links = [["今日のまとめ", "/digest"], ["読み比べ一覧", "/stories"]]
 
 [site.ko]
 subtitle = "번역해서 비교해 읽는 뉴스"
-headline = "같은 뉴스를 매체별로 비교해 읽기."
-facts = [["매시간", "새 기사를 가져옴"], ["원문과 번역", "나란히 읽기"], ["2개 언어", "영어·중국어 기사를 한국어로"]]
-description = "BBC·중앙통신사·연합뉴스와 InfoQ·iThome의 기사를 매시간 모아, 원문과 번역을 나란히 보여 줍니다."
-tags = ["매시간 업데이트", "영·중 → 한국어", "매체별 비교"]
+description = "BBC·중앙통신사·InfoQ·iThome 등의 기사를 1시간마다 모아 한국어로 옮기고, 원문과 나란히 보여 줍니다. 같은 소식을 여러 매체가 썼다면 한데 모아 비교해 읽을 수 있습니다."
 search_hint = "기사 검색 (한국어도 가능)"
 links = ["오늘의 요약", "비교 읽기 목록"]
 
 [site.en-GB]
 subtitle = "The news, translated and compared"
-headline = "One story, read across the outlets."
-facts = [["Hourly", "new articles fetched"], ["Side by side", "each original beside its translation"], ["2 languages", "Chinese and Korean articles in English"]]
-description = "Articles from the BBC, CNA, Yonhap, InfoQ and iThome every hour, each original beside its translation."
-tags = ["Updated hourly", "ZH · KO → English", "Compare the outlets"]
+description = "Every hour it collects articles from CNA, Yonhap, iThome and others, translates the Chinese and Korean ones into English and shows each beside its original. When several outlets cover the same story, they are grouped so you can compare them."
 search_hint = "Search articles (any language)"
 links = ["Today's digest", "All comparisons"]
 
 [site.zh-TW]
 subtitle = "翻譯後比較閱讀的新聞"
-headline = "同一則新聞，比較各家報導。"
-facts = [["每小時", "抓取新文章"], ["原文與譯文", "並列閱讀"], ["2 種語言", "英文與韓文報導譯成中文"]]
-description = "每小時收集 BBC、中央社、韓聯社與 InfoQ、iThome 的報導，原文與譯文並列閱讀。"
-tags = ["每小時更新", "英・韓 → 中文", "各家媒體比較"]
+description = "每小時收集 BBC、韓聯社、InfoQ、iThome 等媒體的報導，翻成中文，與原文並列。好幾家都報了同一件事時，會集中在一起方便比較。"
 search_hint = "搜尋文章（可用中文）"
 links = ["今日摘要", "比較閱讀列表"]
 
@@ -121,13 +105,10 @@ mount = "/infra"
 folder = "../Infra Game"
 name = "CoreLab"
 subtitle = "インフラ運用トレーニングゲーム"
-headline = "障害対応は、ブラウザの中で練習。"
-facts = [["25", "Linux 基礎から始めるミッション"], ["333", "分野別の学習問題（資格 60 試験）"], ["無料", "インストール不要・架空データ"]]
 dark = true
-description = "Kubernetes・Docker・AWS などのよくある障害を、ブラウザの中のターミナルで直しながら学べます。"
+description = "壊れたサーバーやクラスタを、ブラウザの中のターミナルで直すゲームです。Linux の基礎から Docker・Kubernetes・AWS まで 25 ミッション。中身はすべて作り物なので、何を打っても壊れて困るものはありません。"
 icon = "terminal"
 accent = "orange"
-tags = ["インストール不要", "Linux 基礎から 25 ミッション", "架空データで安全"]
 home_link = "own"
 preview = "portal.json" # 「すぐ遊べるミッション」（Infra Game 側で管理）
 search = "/#/ref?q={q}" # コマンド辞典
@@ -136,28 +117,19 @@ links = [["ラーニング", "/#/learn"], ["コマンド辞典", "/#/ref"], ["�
 
 [site.ko]
 subtitle = "인프라 운영 트레이닝 게임"
-headline = "장애 대응을 브라우저 안에서 연습."
-facts = [["25", "Linux 기초부터 시작하는 미션"], ["333", "분야별 학습 문제 (자격증 60종)"], ["무료", "설치 불필요 · 가상 데이터"]]
-description = "Kubernetes·Docker·AWS 등에서 흔한 장애를 브라우저 속 터미널에서 직접 고치며 배웁니다."
-tags = ["설치 불필요", "Linux 기초부터 25개 미션", "가상 데이터라 안전"]
+description = "고장 난 서버와 클러스터를 브라우저 속 터미널에서 고치는 게임입니다. Linux 기초부터 Docker·Kubernetes·AWS까지 25개 미션. 전부 가짜 환경이라 무엇을 입력해도 망가질 걱정이 없습니다."
 search_hint = "명령어 검색 (예: kubectl)"
 links = ["학습", "명령어 사전", "프리 랩"]
 
 [site.en-GB]
 subtitle = "Infrastructure operations training game"
-headline = "Practise incident response in your browser."
-facts = [["25", "missions, from Linux basics up"], ["333", "practice questions (60 certifications)"], ["Free", "nothing to install, fictional data"]]
-description = "Fix common Kubernetes, Docker and AWS failures in a terminal inside your browser, and learn as you go."
-tags = ["Nothing to install", "25 missions from Linux basics up", "Safe: all data is fictional"]
+description = "A game where you fix broken servers and clusters in a terminal inside your browser: 25 missions, from Linux basics to Docker, Kubernetes and AWS. Everything in it is made up, so nothing you type can break anything real."
 search_hint = "Search commands (e.g. kubectl)"
 links = ["Learning", "Command reference", "Free lab"]
 
 [site.zh-TW]
 subtitle = "基礎架構維運訓練遊戲"
-headline = "在瀏覽器裡練習排除故障。"
-facts = [["25", "從 Linux 基礎開始的任務"], ["333", "分領域練習題（60 項認證）"], ["免費", "免安裝・虛構資料"]]
-description = "在瀏覽器裡的終端機動手排除 Kubernetes、Docker、AWS 的常見故障，邊做邊學。"
-tags = ["免安裝", "從 Linux 基礎開始的 25 個任務", "虛構資料，安全無虞"]
+description = "在瀏覽器裡的終端機修好壞掉的伺服器和叢集的遊戲。從 Linux 基礎到 Docker、Kubernetes、AWS，共 25 個任務。裡面全是虛構的，輸入什麼都不會弄壞真的東西。"
 search_hint = "搜尋指令（例：kubectl）"
 links = ["學習", "指令辭典", "自由實驗室"]
 
@@ -165,12 +137,9 @@ links = ["學習", "指令辭典", "自由實驗室"]
 mount = "/val"
 python = "../VALORANT-Project"
 entry = "valtracker.hosting:site" # 名前と副題は VAL Tracker 側が返す
-headline = "Riot ID ひとつで、通算の記録まで。"
-facts = [["登録不要", "Riot ID を入れるだけ"], ["通算", "エージェント別・マップ別の成績も"], ["大会", "日程と結果、パッチノートも"]]
-description = "ランク、最近の試合、エージェント別・マップ別の成績を、Riot ID を入れるだけで。ランキングとパッチノート、大会の情報も。"
+description = "Riot ID（名前#タグ）を入れると、ランク、最近の試合、エージェント別・マップ別の成績が出ます。一度読んだ試合は残しておくので、通算の数字も見られます。ランキング、パッチノート、大会の日程も。"
 icon = "game"
 accent = "red"
-tags = ["登録不要", "通算の戦績も", "パッチ・大会の情報"]
 home_link = "own"
 search = "/search?q={q}"
 search_hint = "Riot ID（名前#タグ）"
@@ -178,27 +147,59 @@ links = [["ランキング", "/leaderboard"], ["エージェント", "/agents"],
 
 [site.ko]
 subtitle = "VALORANT 전적 트래커"
-headline = "Riot ID 하나로 통산 기록까지."
-facts = [["가입 불필요", "Riot ID만 입력"], ["통산", "요원별·맵별 성적까지"], ["대회", "일정과 결과, 패치 노트도"]]
-description = "Riot ID만 입력하면 랭크와 최근 경기, 요원별·맵별 성적을 볼 수 있습니다. 리더보드와 패치 노트, 대회 정보도."
-tags = ["회원가입 불필요", "통산 전적까지", "패치·대회 정보"]
+description = "Riot ID(이름#태그)를 입력하면 랭크, 최근 경기, 요원별·맵별 성적이 나옵니다. 한 번 읽은 경기는 남겨 두기 때문에 통산 기록도 볼 수 있습니다. 리더보드, 패치 노트, 대회 일정도 있습니다."
 search_hint = "Riot ID (이름#태그)"
 links = ["리더보드", "요원", "패치 노트", "e스포츠", "도구"]
 
 [site.en-GB]
 subtitle = "VALORANT stats tracker"
-headline = "One Riot ID. Lifetime stats."
-facts = [["No sign-up", "just enter a Riot ID"], ["Lifetime", "results by agent and by map"], ["Esports", "schedules, results and patch notes"]]
-description = "Rank, recent matches and results by agent and map, from just a Riot ID. Plus the leaderboard, patch notes and esports."
-tags = ["No sign-up", "Lifetime stats too", "Patches and esports"]
+description = "Enter a Riot ID (Name#tag) to see rank, recent matches and results by agent and by map. Every match it reads is kept, so lifetime totals build up too. Also the leaderboard, patch notes and esports schedules."
 search_hint = "Riot ID (Name#tag)"
 links = ["Leaderboard", "Agents", "Patch notes", "Esports", "Tools"]
 
 [site.zh-TW]
 subtitle = "VALORANT 戰績查詢"
-headline = "一個 Riot ID，查到生涯紀錄。"
-facts = [["免註冊", "只要輸入 Riot ID"], ["生涯", "各特務、各地圖的戰績"], ["賽事", "賽程與結果，還有更新說明"]]
-description = "只要輸入 Riot ID，就能看到牌位、近期對戰與各特務、各地圖的戰績。也有排行榜、更新說明與賽事資訊。"
-tags = ["免註冊", "也有生涯戰績", "更新與賽事資訊"]
+description = "輸入 Riot ID（名稱#標籤），就會列出牌位、近期對戰、各特務與各地圖的戰績。讀過的對戰都會保留，所以也看得到生涯數字。另有排行榜、更新說明與賽事賽程。"
 search_hint = "Riot ID（名稱#標籤）"
 links = ["排行榜", "特務", "更新說明", "電競", "工具"]
+
+# 最近の変更（サイト一覧のいちばん上に新しい順で 6 件）。day は日付、site はそのサイトのアドレス（省略可）、
+# text は日本語、ko / en-GB / zh-TW はその言語（ないと日本語）。
+[[change]]
+day = 2026-11-27
+text = "4 サイトとも、宣伝文句のような見出しと飾りの数字をやめ、何ができるかを普通の文で書き直しました。"
+ko = "네 사이트 모두 광고 문구 같은 제목과 장식용 숫자를 빼고, 무엇을 할 수 있는지 평범한 문장으로 다시 썼습니다."
+en-GB = "All four sites: slogan headlines and decorative numbers replaced with plain sentences about what each one does."
+zh-TW = "四個網站都拿掉了像廣告詞的標題和裝飾用的數字，改用平實的句子說明能做什麼。"
+
+[[change]]
+day = 2026-11-26
+site = "/val"
+text = "サブ垢かどうかの推定を、% とその根拠つきで出すようにしました（プレイヤーのページとライブの全席）。"
+ko = "부계정 여부 추정을 %와 근거로 보여 줍니다 (플레이어 페이지와 라이브의 모든 자리)."
+en-GB = "The smurf estimate is now a percentage with the evidence behind it, on player pages and every seat in Live."
+zh-TW = "分身帳號的推測改成以 % 加上依據顯示（玩家頁面與即時的每個座位）。"
+
+[[change]]
+day = 2026-11-26
+site = "/val"
+text = "Windows アプリのライブ画面に「今回のセッション」を足しました。"
+ko = "Windows 앱의 라이브 화면에 '이번 세션'을 추가했습니다."
+en-GB = "The Windows app's Live screen now has a \"This session\" panel."
+zh-TW = "Windows 應用程式的即時畫面加上了「本次遊玩」。"
+
+[[change]]
+day = 2026-11-19
+site = "/infra"
+text = "Linux 基礎のミッションを 6 本足して 25 本に。進み具合をファイルに書き出して別の端末で続けられます。"
+ko = "Linux 기초 미션을 6개 추가해 25개가 되었습니다. 진행 상황을 파일로 내보내 다른 기기에서 이어 할 수 있습니다."
+en-GB = "Six more Linux missions (25 in all), and progress can be exported to a file and carried on on another device."
+zh-TW = "Linux 基礎任務多了 6 個，共 25 個。進度可以匯出成檔案，在別的裝置繼續。"
+
+[[change]]
+day = 2026-11-19
+site = "/news"
+text = "登録なしで記事の保存・既読・共有ができるように（ブラウザに保存）。RSS フィードも出しました。"
+ko = "가입 없이 기사 저장·읽음 표시·공유가 됩니다 (브라우저에 저장). RSS 피드도 생겼습니다."
+en-GB = "Save, mark as read and share articles without an account (kept in your browser), plus an RSS feed."
+zh-TW = "不用註冊就能儲存、標記已讀與分享文章（存在瀏覽器裡），也提供 RSS 訂閱。"
