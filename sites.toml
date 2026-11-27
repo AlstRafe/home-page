@@ -3,26 +3,26 @@
 # 書き間違いがあると、このPCから開いたときだけページ下の「持ち主向け」欄に理由が出ます。
 
 title = "サイト一覧"
-headline = "haruxera"
+headline = "Yorimichi"
 lead = "ニュースの読み比べ、インフラ障害の練習、VALORANT の戦績。ひとりで作って、気づいたところから直しています。どれも登録なしで使えます。"
 about = "どのサイトも個人が試験的に公開しているもので、内容や公開は予告なく変わることがあります。"
 
 # ほかの言語（訪問者が右上のメニューで選ぶ。ない項目は日本語のまま）。各サイトの [site.ko] なども同じ形。
 [ko]
 title = "사이트 목록"
-headline = "haruxera"
+headline = "Yorimichi"
 lead = "뉴스 비교 읽기, 인프라 장애 연습, VALORANT 전적. 혼자 만들고, 눈에 띄는 곳부터 고치고 있습니다. 모두 가입 없이 쓸 수 있습니다."
 about = "모든 사이트는 개인이 시험적으로 공개하는 것으로, 내용과 공개 여부는 예고 없이 바뀔 수 있습니다."
 
 [en-GB]
 title = "All sites"
-headline = "haruxera"
+headline = "Yorimichi"
 lead = "A news reader that puts outlets side by side, a game for practising on broken servers, and a VALORANT stats tracker. One person builds them and fixes things as they turn up. None of them needs an account."
 about = "Every site here is a personal experiment; content and availability may change without notice."
 
 [zh-TW]
 title = "網站列表"
-headline = "haruxera"
+headline = "Yorimichi"
 lead = "新聞比較閱讀、基礎架構故障練習、VALORANT 戰績。一個人做的，發現問題就修。全部不用註冊。"
 about = "每個網站都是個人試驗性公開的，內容與公開狀態可能隨時變更，恕不另行通知。"
 
