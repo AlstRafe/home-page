@@ -167,6 +167,14 @@ links = ["排行榜", "特務", "更新說明", "電競", "工具"]
 # text は日本語、ko / en-GB / zh-TW はその言語（ないと日本語）。
 [[change]]
 day = 2026-11-27
+site = "/val"
+text = "eスポーツの日程で、勝ち上がりが決まっていないチームを「TBD」でなく「未定」と出すようにしました（お気に入りの星も出しません）。"
+ko = "e스포츠 일정에서 아직 정해지지 않은 팀을 'TBD' 대신 '미정'으로 표시합니다 (즐겨찾기 별도 표시하지 않음)."
+en-GB = "Esports schedules: teams not decided yet now read \"TBD\" in grey, with no favourite star."
+zh-TW = "電競賽程中尚未確定的隊伍，改以「未定」顯示（也不顯示最愛的星號）。"
+
+[[change]]
+day = 2026-11-27
 text = "4 サイトとも、宣伝文句のような見出しと飾りの数字をやめ、何ができるかを普通の文で書き直しました。"
 ko = "네 사이트 모두 광고 문구 같은 제목과 장식용 숫자를 빼고, 무엇을 할 수 있는지 평범한 문장으로 다시 썼습니다."
 en-GB = "All four sites: slogan headlines and decorative numbers replaced with plain sentences about what each one does."
