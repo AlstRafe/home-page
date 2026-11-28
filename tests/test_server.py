@@ -446,5 +446,28 @@ class LauncherTests(unittest.TestCase):
             self.assertIn((ROOT.parent / "News Site" / "work" / "app" / "requirements.txt").resolve(), files)
 
 
+class BindProbeTest(unittest.TestCase):
+    def test_a_live_listener_is_not_bindable(self) -> None:
+        with socket.socket() as live:
+            live.bind(("127.0.0.1", 0))
+            live.listen()
+            self.assertFalse(server._bindable("127.0.0.1", live.getsockname()[1]))
+
+    @unittest.skipIf(os.name == "nt", "TIME_WAIT reuse is a POSIX matter")
+    def test_connections_the_last_run_closed_do_not_block_a_restart(self) -> None:
+        listener = socket.socket()
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        port = listener.getsockname()[1]
+        client = socket.create_connection(("127.0.0.1", port))
+        accepted, _ = listener.accept()
+        accepted.close()  # the server closes first: its side waits in TIME_WAIT
+        client.recv(1)
+        client.close()
+        listener.close()
+        self.assertTrue(server._bindable("127.0.0.1", port))
+
+
 if __name__ == "__main__":
     unittest.main()
