@@ -383,9 +383,14 @@ def _version(app: App) -> str:
 
 
 def _bindable(host: str, port: int) -> bool:
+    """Whether waitress could listen there. Like waitress, ignore connections the last run closed
+    (TIME_WAIT, a minute on Linux): without SO_REUSEADDR every restart failed "port in use" for that
+    minute and the sites were down (2026-11-28). Not on Windows, where it would let us share a live port."""
     family = socket.AF_INET6 if ipaddress.ip_address(host).version == 6 else socket.AF_INET
     try:
         with socket.socket(family, socket.SOCK_STREAM) as probe:
+            if os.name != "nt":
+                probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             probe.bind((host, port))
         return True
     except OSError:
